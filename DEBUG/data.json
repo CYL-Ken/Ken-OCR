@@ -1,0 +1,11 @@
+{
+   "machine_name" : "wow",
+   "maskOn" : "Yes",
+   "password" : "123456",
+   "personID" : "abcd",
+   "personName" : "Lee",
+   "temperature" : "36.6",
+   "timeStamp" : "A123456789",
+   "travelHistory" : "",
+   "userid" : "abc"
+}
