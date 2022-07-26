@@ -442,15 +442,13 @@ static int ToWchar(char* &src, wchar_t* &dest, const char *locale = "zh_CN.utf8"
 
 //初始化系統
 int initTesseract(SysSet_t Set){
-    
- 
-        api_eng_id = new tesseract::TessBaseAPI();
-        if (api_eng_id->Init(NULL, Set.OCR_Eng)) {
-            fprintf(stderr, "Could not initialize tesseract.\n");
-            exit(1);}
-        api_eng_id->SetVariable("tessedit_char_whitelist", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
-        api_eng_id->SetVariable("tessedit_char_blacklist", " .|*%$#@!*(){}[]§");   
-    cerr << "init  Tesseract complete\n";
+    api_eng_id = new tesseract::TessBaseAPI();
+    if (api_eng_id->Init(NULL, Set.OCR_Eng)) {
+        fprintf(stderr, "Could not initialize tesseract.\n");
+        exit(1);}
+    api_eng_id->SetVariable("tessedit_char_whitelist", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
+    api_eng_id->SetVariable("tessedit_char_blacklist", " .|*%$#@!*(){}[]§");   
+    cout << "[System State]Initial Tesseract Complete" << endl;
     
     return 0;
 }
@@ -584,7 +582,7 @@ int initSystem(string Set_xml, SysSet_t &Set, CardSet_t Card_set[]){
       
    
     fs.release();
-    cerr << "init  SystemSet complete\n";   
+    cout << "[System State]Initial System Setting complete" << endl;   
     
     return 0;
 }
@@ -629,32 +627,27 @@ int init_TFLife_model(const char* tflife_path,modelSet_t &Set,
 unique_ptr<tflite::Interpreter> &interpreter,unique_ptr<tflite::FlatBufferModel> &model,
 tflite::ops::builtin::BuiltinOpResolver &resolver) 
 {
-        model = tflite::FlatBufferModel::BuildFromFile(tflife_path);
-        if (tflite::InterpreterBuilder(*model, resolver)(&interpreter) != kTfLiteOk) {
-            cout << "InterpreterBuilder failed";
-            
-            }
-        
-        interpreter->AllocateTensors();
-   
-        interpreter->SetAllowFp16PrecisionForFp32(true);
-        interpreter->SetNumThreads(4);      //quad core
-    
-    
-        // Get input dimension from the input tensor metadata
-        // Assuming one input only
-        Set.In = interpreter->inputs()[0];
-        Set.model_height   = interpreter->tensor(Set.In)->dims->data[3];
-        Set.model_width    = interpreter->tensor(Set.In)->dims->data[2];
-        Set.model_channels = interpreter->tensor(Set.In)->dims->data[1];
-       
-        cout << "In   : "<< Set.In << endl;
-        cout << "height   : "<< Set.model_height << endl;
-        cout << "width    : "<< Set.model_width << endl;
-        cout << "channels : "<< Set.model_channels << endl;
-    
-        
-         
+    model = tflite::FlatBufferModel::BuildFromFile(tflife_path);
+    if (tflite::InterpreterBuilder(*model, resolver)(&interpreter) != kTfLiteOk) {
+        cout << "InterpreterBuilder failed";
+    }
+    interpreter->AllocateTensors();
+    interpreter->SetAllowFp16PrecisionForFp32(true);
+    interpreter->SetNumThreads(4);      //quad core
+
+    // Get input dimension from the input tensor metadata
+    // Assuming one input only
+    Set.In = interpreter->inputs()[0];
+    Set.model_height   = interpreter->tensor(Set.In)->dims->data[3];
+    Set.model_width    = interpreter->tensor(Set.In)->dims->data[2];
+    Set.model_channels = interpreter->tensor(Set.In)->dims->data[1];
+
+    cout << "Model Information:" << endl;    
+    cout << "In   : "<< Set.In << endl;
+    cout << "height   : "<< Set.model_height << endl;
+    cout << "width    : "<< Set.model_width << endl;
+    cout << "channels : "<< Set.model_channels << endl;
+
   	return 0;
 }
 
@@ -1364,9 +1357,11 @@ int main(int argc, char *argv[])
     cgmhDataSender sender;
     
     //TFLife init     
+    cout << "[System State]Initial Card Recognition Model" << endl;
     init_TFLife_model(Seting._tflife_path,Model_Set,interpreter,model,resolver);
     
     //TF OCR init   
+    cout << "[System State]Initial Name Recognition Model" << endl;
     init_TFLife_model(Seting.OCR_Chi,OcRModel_Set,interpreter_OCR,model_OCR,resolver_OCR);
     ifstream in("tch_name_dict_1685.txt");
     if(!in.is_open()) return -1;
@@ -1383,8 +1378,7 @@ int main(int argc, char *argv[])
     // ------------------------------------------------------------------------
     // GUI
     // ------------------------------------------------------------------------
-    if(Seting.show_r)
-    cvui::init(WINDOW_NAME);
+    if(Seting.show_r) cvui::init(WINDOW_NAME);
     
     //cvui::init(WINDOW1_NAME);
     int x = 660;
@@ -1409,7 +1403,7 @@ int main(int argc, char *argv[])
         setWindowProperty("Smart Card Result",WND_PROP_TOPMOST,WINDOW_GUI_NORMAL);  
     }
     
-    cerr << "init complete\n";
+    cout << "[System State]Initial UI" << endl;
     
     while(bOCR)
     {    
@@ -1434,7 +1428,6 @@ int main(int argc, char *argv[])
             d1=0;
             d2=0;
                 
-
             ////////RGB Find Card////////////////////////////////////////
             auto startTimer_FindCard = std::chrono::steady_clock::now();
 
@@ -1584,8 +1577,9 @@ int main(int argc, char *argv[])
             auto startTimer_CardType = std::chrono::steady_clock::now();
             if(d2>Seting.Card_PixY&&d1>Seting.Card_PixX&&d2<1000&&d1<2000||d1>Seting.Card_PixY&&d2>Seting.Card_PixX&&d2<2000&&d1<1000)
             {
-                cout << "Card_Pix(" << Seting.Card_PixX << ", " << Seting.Card_PixY << ")" <<endl;
-                int rType=-1;              //辨識卡片種類結果   
+                cout << "[Card]Find Card Pixel:" << d1 << ", " << d2 << ")" <<endl;
+                int rType=-1;              
+                //辨識卡片種類結果   
                 rType=CardType_Rotate_model(frame,I_rgb_warped,I_hsv_warped,Card[0].TempScore,Model_Set);
                 if(rType !=-1)
                 {
@@ -1634,19 +1628,13 @@ int main(int argc, char *argv[])
 
             auto endTimer_CardType = std::chrono::steady_clock::now();
             std::chrono::milliseconds t_msec_CardType = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_CardType - startTimer_CardType);
-            std::cout << "Check CardType and Rotate msec = " << t_msec_CardType.count() << std::endl;
+            std::cout << "[Process Time]Find Card: " << t_msec_CardType.count() << "msec." << std::endl;
             
-            //卡片錯誤
-            // if(lines.size()>0&&!bCardDetect&&!bOCR_Start&&!bOCROK)
-            // {
-            //     cout << "Card position check" << endl;
-            //     bWarn=true;
-            // }
             cout << "===== DEBUG =====\n  d1:" << d1 << ", d2:" << d2 << endl;
             cout << "  bCardDetect:" << bCardDetect << ", bOCR_Start:" << bOCR_Start << ", bOCROK:" << bOCROK << endl;
             if(d1>200&&d2>200&&!bCardDetect&&!bOCR_Start&&!bOCROK)
             {
-                cout << "Card position check" << endl;
+                cout << "Check Position" << endl;
                 bWarn=true;
             }
             
@@ -1746,7 +1734,7 @@ int main(int argc, char *argv[])
             }
             auto endTimer_OCRALL = std::chrono::steady_clock::now();
             std::chrono::milliseconds t_msec_OCRALL = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_OCRALL - startTimer_OCRALL);
-            std::cout << "OCR ALL msec = " << t_msec_OCRALL.count() << std::endl;
+            std::cout << "[Process Time]Full OCR: " << t_msec_OCRALL.count() << "msec." << std::endl;
             
             
             //Confirmation timed out
@@ -1760,8 +1748,8 @@ int main(int argc, char *argv[])
                     bOCRNG=true; 
                 }
             }
-            cout << " === Reinit Check === " << endl;
-            cout << " d1:" << d1 << ", d2:" << d2 << ", Card Type:" << Type_num << ", RFIDOK:" << bRFIDOK << endl;
+            cout << " === Reset Check === " << endl;
+            cout << " d1:" << d1 << ", d2:" << d2 << "\nCard Type:" << Type_num << ", RFIDOK:" << bRFIDOK << endl;
             //卡片取走初始化
             if(d2<=60&&d1<=60&&Type_num==-1)
             {
@@ -1781,7 +1769,7 @@ int main(int argc, char *argv[])
                 rfid_Text_name="";
                 rfid_Text_num="";
                 rRect= RotatedRect(Point2f(0,0), Size2f(0,0), 0);
-                cout << "[System State]Reinitial OCR" <<endl;
+                cout << "[System State]Reset OCR" <<endl;
                 _OCRresult.clear();
                 moveWindow("OCR Result", 0, 1200);
                 //moveWindow("Loading card data...", 0, 1200);
@@ -1793,7 +1781,7 @@ int main(int argc, char *argv[])
                 RFID_img=Mat(250, 768, CV_8UC3);
                 RFID_img=Scalar(49, 52, 49);
                 
-                cout << "RFID-OCR_Start->OCR_End" <<endl;
+                cout << "[RFID]Start->End" <<endl;
                 PREV_RFID = CURR_RFID;
                 //moveWindow("Smart Card Result", 0, 1200);
                 //moveWindow("Loading card data...", 0, 1200);
@@ -1836,8 +1824,9 @@ int main(int argc, char *argv[])
             auto startTimer_OCROKNG = std::chrono::steady_clock::now();    
             if(bOCROK && !Text_name.empty() && !Text_num.empty())
             {
-                resize(frame,r_frame , Size(320,240),INTER_NEAREST);
-                //putText(r_frame, _temperature, cv::Point(10, 50),cv::FONT_HERSHEY_COMPLEX,2, cv::Scalar(0, 255, 0),3);
+                // Try to change result picture
+                resize(I_rgb_warped, r_frame, Size(320,240), INTER_NEAREST);
+                //resize(frame,r_frame , Size(320,240),INTER_NEAREST);
                 
                 rText_name="MR./MS. : "+Text_name.substr(0,3);
                 char* cname=(char*)rText_name.c_str();
