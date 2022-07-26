@@ -1,9 +1,9 @@
 //============================================================================
-// Name        : OCR_DOME.cpp
-// Author      : Walter
-// Version     : 1.9.0
+// Name        : OCR
+// Author      : Ken
+// Version     : 1.9.6
 // Copyright   : CYL-TEK reserved
-// Description : OCR_DOME 
+// Description : OCR_DEMO 
 //============================================================================
 
 #include <iostream>
