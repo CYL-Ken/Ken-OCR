@@ -444,7 +444,7 @@ int initTesseract(SysSet_t Set){
         exit(1);}
     api_eng_id->SetVariable("tessedit_char_whitelist", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
     api_eng_id->SetVariable("tessedit_char_blacklist", " .|*%$#@!*(){}[]§");   
-    cout << "[System State]Initial Tesseract Complete." << endl;
+    cout << "[System State] Initial Tesseract Complete." << endl;
     
     return 0;
 }
@@ -578,7 +578,7 @@ int initSystem(string Set_xml, SysSet_t &Set, CardSet_t Card_set[]){
       
    
     fs.release();
-    cout << "[System State]Initial System Setting complete." << endl;   
+    cout << "[System State] Initial System Setting complete." << endl;   
     
     return 0;
 }
@@ -834,6 +834,9 @@ int OCRDetect_integral(CardSet_t Card[],int CardType)
             Rect id_roi(top, down);
             id_result(id_roi).copyTo(IDimg);
             imshow("ID Result", IDimg);
+        }else{
+            cout << " -  Cannot Find ID Number." << endl;
+            return -1;
         }
         cout << " -  ID Number Found." << endl;
 
@@ -881,6 +884,9 @@ int OCRDetect_integral(CardSet_t Card[],int CardType)
             
             Rect name_roi(top, down);
             name_result(name_roi).copyTo(Nameimg);
+        }else{
+            cout << " -  Cannot Find Name." << endl;
+            return -1;
         }
         cout << " -  Name Found." << endl;
 
@@ -972,6 +978,9 @@ int OCRDetect_integral(CardSet_t Card[],int CardType)
             //id_result(id_roi).copyTo(IDimg);
             gray(id_roi).copyTo(IDimg);
             threshold(IDimg, IDimg, 215, 255, THRESH_BINARY);
+        }else{
+            cout << " -  Cannot Find ID Number." << endl;
+            return -1;
         }
         cout << " -  ID Number Found." << endl;
         
@@ -1027,10 +1036,13 @@ int OCRDetect_integral(CardSet_t Card[],int CardType)
             Point down(rect.br().x, rect.br().y);
             rectangle(src_img, top, down, Scalar(255, 0, 0), 1);
             
-            //imshow("Line", src_img);
+            //imshow("result on src", src_img);
             
             Rect name_roi(top, down);
             name_result(name_roi).copyTo(Nameimg);
+        }else{
+            cout << " -  Cannot Find Name." << endl;
+            return -1;
         }
 
         rectangle(I_rgb_warped, ID_top, ID_Down, cv::Scalar(0, 255, 0), 1);
@@ -1059,7 +1071,7 @@ int OCR(CardSet_t Card[],int CardType, SysSet_t &Set,CvxText &tmp,modelSet_t mod
         }
         auto endTimer = std::chrono::steady_clock::now();
         std::chrono::milliseconds t_msec = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer - startTimer);
-        std::cout << "[Process Time]OCR Name: " << t_msec.count() << "msec." << std::endl;
+        std::cout << "[Process Time] OCR Name: " << t_msec.count() << "msec." << std::endl;
     
         auto output_data = interpreter_OCR->tensor(interpreter_OCR->outputs()[0])->data.f;
         
@@ -1079,7 +1091,7 @@ int OCR(CardSet_t Card[],int CardType, SysSet_t &Set,CvxText &tmp,modelSet_t mod
         //cout<<"output_data :"<<data[2].label_index<<" string: "<<Labels[data[2].label_index]<<" results:"<<data[2].prob<<endl;
         
         Text_name=Labels[data[0].label_index];
-        cout << "[Result]Name String = " << Text_name << std::endl;
+        cout << "[Result] Name String = " << Text_name << std::endl;
 
 
         startTimer = std::chrono::steady_clock::now();
@@ -1093,8 +1105,8 @@ int OCR(CardSet_t Card[],int CardType, SysSet_t &Set,CvxText &tmp,modelSet_t mod
         
         endTimer = std::chrono::steady_clock::now();
         t_msec = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer - startTimer);
-        std::cout << "[Process Time]OCR ID: " << t_msec.count() << "msec." << std::endl;
-        cout << "[Result]ID String = " << Text_num << std::endl;
+        std::cout << "[Process Time] OCR ID: " << t_msec.count() << "msec." << std::endl;
+        cout << "[Result] ID String = " << Text_num << std::endl;
         Text_num.erase(remove(Text_num.begin(), Text_num.end(), '\n'), Text_num.end());
         Text_num.erase(remove(Text_num.begin(), Text_num.end(), ' '), Text_num.end());
         //flip(frame, frame, 1);  //Flipped Horizontally 
@@ -1336,7 +1348,7 @@ Point2f computeIntersect(Vec2f line1, Vec2f line2)
 
 int main(int argc, char *argv[])
 {
-    cout << "[System State]Start Initial System." << endl;
+    cout << "[System State] Start Initial System." << endl;
     initSystem(OCRfile_Name,Seting,Card);
     initTesseract(Seting);
     
@@ -1357,11 +1369,11 @@ int main(int argc, char *argv[])
     
     //TFLife init     
     init_TFLife_model(Seting._tflife_path,Model_Set,interpreter,model,resolver);
-    cout << "[System State]Initial Card Recognition Model Complete." << endl;
+    cout << "[System State] Initial Card Recognition Model Complete." << endl;
 
     //TF OCR init   
     init_TFLife_model(Seting.OCR_Chi,OcRModel_Set,interpreter_OCR,model_OCR,resolver_OCR);
-    cout << "[System State]Initial Name Recognition Model Complete." << endl;
+    cout << "[System State] Initial Name Recognition Model Complete." << endl;
     ifstream in("tch_name_dict_1685.txt");
     if(!in.is_open()) return -1;
     string str;
@@ -1402,7 +1414,7 @@ int main(int argc, char *argv[])
         setWindowProperty("Smart Card Result",WND_PROP_TOPMOST,WINDOW_GUI_NORMAL);  
     }
     
-    cout << "[System State]Initial UI Complete." << endl;
+    cout << "[System State] Initial UI Complete." << endl;
     
     while(bOCR)
     {    
@@ -1572,7 +1584,7 @@ int main(int argc, char *argv[])
             auto startTimer_CardType = std::chrono::steady_clock::now();
             if(d2>Seting.Card_PixY&&d1>Seting.Card_PixX&&d2<1000&&d1<2000||d1>Seting.Card_PixY&&d2>Seting.Card_PixX&&d2<2000&&d1<1000)
             {
-                cout << "[Card]Find Card Pixel:" << d1 << ", " << d2 << ")" <<endl;
+                cout << "[Card] Find Card Pixel:" << d1 << ", " << d2 << ")" <<endl;
                 int rType=-1;              
                 //辨識卡片種類結果   
                 rType=CardType_Rotate_model(frame,I_rgb_warped,I_hsv_warped,Card[0].TempScore,Model_Set);
@@ -1580,7 +1592,7 @@ int main(int argc, char *argv[])
                 {
                     bCardDetect=true;
                     Type_num =rType;
-                    cout << "[Card]Card Type:" << Type_num <<endl;
+                    cout << "[Card] Card Type:" << Type_num <<endl;
                     if(bOCR_End)
                     {
                         TimeOutStart = std::chrono::steady_clock::now();
@@ -1591,7 +1603,7 @@ int main(int argc, char *argv[])
                 } 
                 if(rType ==-1&&bOCR_End)
                 {
-                    cout << "[Card]Not IC or ID Card!" <<endl;  
+                    cout << "[Card] Not IC or ID Card!" <<endl;  
                     bOCR_Start=false;
                     bCardDetect = false;
                     bOCRNG=true; 
@@ -1622,7 +1634,7 @@ int main(int argc, char *argv[])
             
             auto endTimer_CardType = std::chrono::steady_clock::now();
             std::chrono::milliseconds t_msec_CardType = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_CardType - startTimer_CardType);
-            std::cout << "[Process Time]Find Card: " << t_msec_CardType.count() << "msec." << std::endl;
+            std::cout << "[Process Time] Find Card: " << t_msec_CardType.count() << "msec." << std::endl;
             
             cout << "===== DEBUG =====\n  d1:" << d1 << ", d2:" << d2 << endl;
             cout << "  bCardDetect:" << bCardDetect << ", bOCR_Start:" << bOCR_Start << ", bOCROK:" << bOCROK << endl;
@@ -1646,7 +1658,7 @@ int main(int argc, char *argv[])
                 //imshow("I_hsv_warped",I_hsv_warped);
                 auto endTimer_OCRDetect = std::chrono::steady_clock::now();
                 std::chrono::milliseconds t_msec_OCRDetect = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_OCRDetect - startTimer_OCRDetect);
-                std::cout << "[Process Time]OCR Find Target:" << t_msec_OCRDetect.count() << "msec." << std::endl;
+                std::cout << "[Process Time] OCR Find Target:" << t_msec_OCRDetect.count() << "msec." << std::endl;
                 //imshow("I_rgb_warped",I_rgb_warped);
                 //OCR
                 if(rOCR_Detect==-1)
@@ -1662,7 +1674,7 @@ int main(int argc, char *argv[])
                     OCR(Card,Type_num,Seting,text,OcRModel_Set);
                     auto endTimer_OCR = std::chrono::steady_clock::now();
                     std::chrono::milliseconds t_msec_OCR = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_OCR - startTimer_OCR);
-                    std::cout << "[Process Time]OCR: " << t_msec_OCR.count() << "msec." << std::endl;
+                    std::cout << "[Process Time] OCR: " << t_msec_OCR.count() << "msec." << std::endl;
                     OCRresult_t OCR_R;
                     OCR_R.Name=Text_name;
                     OCR_R.ID=Text_num;
@@ -1725,7 +1737,7 @@ int main(int argc, char *argv[])
             }
             auto endTimer_OCRALL = std::chrono::steady_clock::now();
             std::chrono::milliseconds t_msec_OCRALL = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_OCRALL - startTimer_OCRALL);
-            std::cout << "[Process Time]Full OCR: " << t_msec_OCRALL.count() << "msec." << std::endl;
+            std::cout << "[Process Time] Full OCR: " << t_msec_OCRALL.count() << "msec." << std::endl;
             
             
             //Confirmation timed out
@@ -1760,7 +1772,7 @@ int main(int argc, char *argv[])
                 rfid_Text_name="";
                 rfid_Text_num="";
                 rRect= RotatedRect(Point2f(0,0), Size2f(0,0), 0);
-                cout << "[System State]Reset OCR" <<endl;
+                cout << "[System State] Reset OCR" <<endl;
                 _OCRresult.clear();
                 moveWindow("OCR Result", 0, 1200);
                 //moveWindow("Loading card data...", 0, 1200);
@@ -1782,14 +1794,14 @@ int main(int argc, char *argv[])
             {
                 cout << "======Warn======"<< endl;
                 cout << "instruction.size()"<<instruction.size()<< endl;
-                string Text_load="請檢查 卡片";
+                string Text_load="請檢查卡片";
                 
                 char* c_load=(char*)Text_load.c_str();
                 wchar_t* w_load;
                 ToWchar(c_load, w_load);
                 text.putText(Warn_img, w_load, cv::Point(10, 60), cv::Scalar(255, 255, 255));
                 
-                string Text_load1=" 放置位置";
+                string Text_load1="放置位置";
                 char* c_load1=(char*)Text_load1.c_str();
                 wchar_t* w_load1;
                 ToWchar(c_load1, w_load1);
@@ -1829,7 +1841,7 @@ int main(int argc, char *argv[])
                 ToWchar(cID, wID);
                 text.putText(OCR_img, wID, cv::Point(10, 120), cv::Scalar(255, 255, 255));
                 
-                string rstr="請 收回證件";
+                string rstr="請收回證件";
                 char* cstr=(char*)rstr.c_str();
                 wchar_t* wstr;
                 ToWchar(cstr, wstr);
@@ -1893,7 +1905,7 @@ int main(int argc, char *argv[])
             
             auto endTimer_OCROKNG = std::chrono::steady_clock::now();
             std::chrono::milliseconds t_msec_OCROKNG = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_OCROKNG - startTimer_OCROKNG);
-            std::cout << "[Process Time]OCR OK/NG: " << t_msec_OCROKNG.count() << "msec." << std::endl;
+            std::cout << "[Process Time] OCR OK/NG: " << t_msec_OCROKNG.count() << "msec." << std::endl;
             //RFID OK
             cout << "RFIDOK:" << bRFIDOK << endl;
             if(bRFIDOK&&CURR_RFID!="START")
@@ -1926,7 +1938,7 @@ int main(int argc, char *argv[])
                 ToWchar(cID, wID);
                 text.putText(RFID_img, wID, cv::Point(10, 120), cv::Scalar(255, 255, 255));
                 
-                string rstr="請 收回證件";
+                string rstr="請收回證件";
                 char* cstr=(char*)rstr.c_str();
                 wchar_t* wstr;
                 ToWchar(cstr, wstr);
