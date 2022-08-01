@@ -1747,9 +1747,7 @@ int main(int argc, char *argv[])
                     for(int i = 0; i < _OCRresult.size(); i++){
                         Text_load += "...";
                     }
-                    char* c_load=(char*)Text_load.c_str();
-                    wchar_t* w_load;
-                    ToWchar(c_load, w_load);
+                    
                     // text.putText(Loading_img, w_load, cv::Point(10, 50), cv::Scalar(255, 255, 255));
                     ft2->putText(Loading_img, Text_load, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
                     
