@@ -1824,19 +1824,6 @@ int main(int argc, char *argv[])
             if(bWarn) {
                 cout << "======Warn======"<< endl;
                 cout << "instruction.size()"<<instruction.size()<< endl;
-                // string Text_load="請檢查卡片";
-                
-                // char* c_load=(char*)Text_load.c_str();
-                // wchar_t* w_load;
-                // ToWchar(c_load, w_load);
-                // text.putText(Warn_img, w_load, cv::Point(10, 60), cv::Scalar(255, 255, 255));
-                
-                // string Text_load1="放置位置";
-                // char* c_load1=(char*)Text_load1.c_str();
-                // wchar_t* w_load1;
-                // ToWchar(c_load1, w_load1);
-                // text.putText(Warn_img, w_load1, cv::Point(10, 110), cv::Scalar(255, 255, 255));
-
                 string ng_text = "請檢查卡片位置";
                 ft2->putText(Warn_img, ng_text, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
                 
