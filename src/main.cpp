@@ -1784,7 +1784,7 @@ int main(int argc, char *argv[])
             cout << " d1:" << d1 << ", d2:" << d2 << "\nCard Type:" << Type_num << ", RFIDOK:" << bRFIDOK << endl;
             
             //卡片取走初始化
-            if(d2<=60&&d1<=60&&Type_num==-1) {
+            if(d2<=80&&d1<=80&&Type_num==-1) {
                 bCardDetect=false;
                 bOCR_Start=false;
                 bOCR_End=true;
