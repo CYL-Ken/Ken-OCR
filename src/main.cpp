@@ -792,8 +792,7 @@ int OCRDetect_integral(CardSet_t Card[],int CardType)
         Rect IDROI(ID_top,ID_Down);
 
         /*** New ***/
-        //0726 Need Debug by Show Image
-        // Find ID
+        // Find ID    Location: (340,440) (680,550)
         cout << " -  Find ID Number..." << endl;
         Mat src_img;
         I_rgb_warped(IDROI).copyTo(src_img);
@@ -854,7 +853,7 @@ int OCRDetect_integral(CardSet_t Card[],int CardType)
         }
         cout << " -  ID Number Found." << endl;
 
-        // Find Name
+        // Find Name    Location: (300,245) (530,440)
         cout << " -  Find Name..." << endl;
         I_rgb_warped(NameROI).copyTo(src_img);
 
@@ -898,9 +897,6 @@ int OCRDetect_integral(CardSet_t Card[],int CardType)
             Rect rect = boundingRect(contours[max_index]);
             Point top(rect.x, rect.y);
             Point down(rect.br().x, rect.br().y);
-            // rectangle(src_img, top, down, Scalar(255, 0, 0), 1);
-            // cout << "\n\n\n\n" << rect.x << rect.y << rect.br().x << rect.br().y << endl;
-            // cout << "\n x:" << abs(rect.br().x - rect.x) << ",y:" << abs(rect.br().y - rect.y) << endl;
             if(abs(rect.br().x - rect.x) < 20 || abs(rect.br().y - rect.y) < 20){
                 return -1;
             }
@@ -929,7 +925,7 @@ int OCRDetect_integral(CardSet_t Card[],int CardType)
         Rect NameROI(Name_top,Name_Down);
         Rect IDROI(ID_top,ID_Down);
         
-        // ID 
+        // ID Location: (685,495) (1350,600)
         cout << " -  Find ID Number..." << endl;
         Mat src_img;
         I_rgb_warped(IDROI).copyTo(src_img);
