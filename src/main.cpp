@@ -769,7 +769,7 @@ int CardType_Rotate_model(Mat &frame,Mat &Card_Img,Mat &HSV_Card_Img, float temp
 }
 
 
-//OCR檢測位置框選
+// Find ID and Name on Card
 int OCRDetect_integral(CardSet_t Card[],int CardType)
 {
     Mat ID_img;
