@@ -1,4 +1,0 @@
-{
-  "Temperature": 36.7,
-  "MaskOn": true
-}

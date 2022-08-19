@@ -1,0 +1,3 @@
+/home/pi/Documents/id-box-v2.0.0/build/CMakeFiles/rebuild_cache.dir
+/home/pi/Documents/id-box-v2.0.0/build/CMakeFiles/KenOCR.dir
+/home/pi/Documents/id-box-v2.0.0/build/CMakeFiles/edit_cache.dir
