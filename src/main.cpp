@@ -23,7 +23,7 @@ typedef struct CardInfo
 
 CardInfo load_config(CardInfo card_info)
 {
-    cv::FileStorage config("config.xml", cv::FileStorage::READ);
+    cv::FileStorage config("../config/config.xml", cv::FileStorage::READ);
     config["ID_top_x"] >> card_info.id_top.x;
     config["ID_top_y"] >> card_info.id_top.y;
     config["ID_down_x"] >> card_info.id_down.x;
