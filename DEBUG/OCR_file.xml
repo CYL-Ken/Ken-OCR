@@ -62,7 +62,7 @@
 <ID_top_X1>340</ID_top_X1>
 <ID_top_Y1>440</ID_top_Y1>
 <ID_Down_X1>680</ID_Down_X1>
-<ID_Down_Y1>550</ID_Down_Y1>
+<ID_Down_Y1>540</ID_Down_Y1>
 <ID_Roi_width1>280</ID_Roi_width1>
 <ID_Roi_high1>50</ID_Roi_high1>
 
@@ -72,9 +72,9 @@
 <Erode_Name_size1>3</Erode_Name_size1>
 <Dilate_Name_size1>3</Dilate_Name_size1>
 
-<Name_top_X1>300</Name_top_X1>
+<Name_top_X1>290</Name_top_X1>
 <Name_top_Y1>245</Name_top_Y1>
-<Name_Down_X1>530</Name_Down_X1>
+<Name_Down_X1>500</Name_Down_X1>
 <Name_Down_Y1>440</Name_Down_Y1>
 <Name_Roi_width1>90</Name_Roi_width1>
 <Name_Roi_high1>90</Name_Roi_high1>
