@@ -1,0 +1,3 @@
+/home/pi/Ken-OCR-1.9.7/build/CMakeFiles/rebuild_cache.dir
+/home/pi/Ken-OCR-1.9.7/build/CMakeFiles/CylTekOCR.dir
+/home/pi/Ken-OCR-1.9.7/build/CMakeFiles/edit_cache.dir

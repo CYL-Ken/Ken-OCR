@@ -1,7 +1,7 @@
 //============================================================================
 // Name        : OCR
 // Author      : Ken
-// Version     : 1.9.6
+// Version     : 1.9.7
 // Copyright   : CYL-TEK reserved
 // Description : OCR_DEMO
 //============================================================================
@@ -808,7 +808,7 @@ int OCRDetect_integral(CardSet_t Card[], int CardType)
 
         // cout << "Threshold" << endl;
         Mat dst;
-        threshold(gray, dst, 210, 255, THRESH_BINARY);
+        threshold(gray, dst, 200, 255, THRESH_BINARY);
         // imshow("ID Cut threshold", dst);
 
         Mat id_result;
@@ -1169,30 +1169,18 @@ int OCR(CardSet_t Card[], int CardType, SysSet_t &Set, CvxText &tmp, modelSet_t 
         // ss.erase(remove(Text_num.begin(), Text_num.end(), '¥'), Text_num.end());
     }
 
-    if (Text_num[0] == '0')
-        Text_num[0] = 'O';
-    if (Text_num[0] == '5')
-        Text_num[0] = 'S';
-    if (Text_num[0] == '9')
-        Text_num[0] = 'S';
-    if (Text_num[0] == '8')
-        Text_num[0] = 'S';
-    if (Text_num[0] == '6')
-        Text_num[0] = 'G';
-    if (Text_num[0] == '7')
-        Text_num[0] = 'T';
-    if (Text_num[0] == '3')
-        Text_num[0] = 'J';
-    if (Text_num[0] == '1')
-        Text_num[0] = 'I';
-    if (Text_num[0] == '2')
-        Text_num[0] = 'Z';
-    if (Text_num[0] == '[')
-        Text_num[0] = 'L';
-    if (Text_num[0] == '$')
-        Text_num[0] = 'S';
-    if (Text_num[0] == '4')
-        Text_num[0] = 'A';
+    if (Text_num[0] == '0')      Text_num[0] = 'O';
+    else if (Text_num[0] == '5') Text_num[0] = 'S';
+    else if (Text_num[0] == '9') Text_num[0] = 'S';
+    else if (Text_num[0] == '8') Text_num[0] = 'S';
+    else if (Text_num[0] == '6') Text_num[0] = 'G';
+    else if (Text_num[0] == '7') Text_num[0] = 'T';
+    else if (Text_num[0] == '3') Text_num[0] = 'J';
+    else if (Text_num[0] == '1') Text_num[0] = 'I';
+    else if (Text_num[0] == '2') Text_num[0] = 'Z';
+    else if (Text_num[0] == '[') Text_num[0] = 'L';
+    else if (Text_num[0] == '$') Text_num[0] = 'S';
+    else if (Text_num[0] == '4') Text_num[0] = 'A';
 
     // if(Text_num[0]=='¥')Text_num[0]='Y';
     // if(Text_num[0]=='£')Text_num[0]='E';
@@ -1479,6 +1467,8 @@ int main(int argc, char *argv[])
 
     cout << "[System State] Initial UI Complete." << endl;
 
+    int predict_times = 4;
+
     while (bOCR)
     {
         // check read frame succeeded
@@ -1706,9 +1696,9 @@ int main(int argc, char *argv[])
             std::chrono::milliseconds t_msec_CardType = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_CardType - startTimer_CardType);
             std::cout << "[Process Time] Chcek Card: " << t_msec_CardType.count() << "msec." << std::endl;
 
-            cout << "===== DEBUG =====\n  d1:" << d1 << ", d2:" << d2 << endl;
+            cout << "===== DEBUG (WARN or NG) =====\n  d1:" << d1 << ", d2:" << d2 << endl;
             cout << "  bCardDetect:" << bCardDetect << ", bOCR_Start:" << bOCR_Start << ", bOCROK:" << bOCROK << endl;
-            if (d1 > 200 && d2 > 200 && !bCardDetect && !bOCR_Start && !bOCROK)
+            if (d1 > 500 && d2 > 500 && !bCardDetect && !bOCR_Start && !bOCROK)
             {
                 cout << "Not detect card but get some card" << endl;
                 cout << "Check Position" << endl;
@@ -1753,10 +1743,10 @@ int main(int argc, char *argv[])
                     // cout << "_OCRresult.size()" << _OCRresult.size() <<endl;
                 }
 
-                // OCR 3次後比較
-                if (_OCRresult.size() >= 3)
+                // OCR 幾次後比較
+                if (_OCRresult.size() >= predict_times)
                 {
-
+                    /**
                     if (_OCRresult[0].Name == _OCRresult[1].Name)
                         Text_name = _OCRresult[0].Name;
                     else if (_OCRresult[0].Name == _OCRresult[2].Name)
@@ -1774,6 +1764,9 @@ int main(int argc, char *argv[])
                         Text_num = _OCRresult[1].ID;
                     else
                         Text_num = "";
+                    **/
+                    Text_name = _OCRresult[predict_times-1].Name;
+                    Text_num = _OCRresult[predict_times-1].ID;
 
                     cout << "[Result] Name:" << Text_name << ", ID:" << Text_num << endl;
 
@@ -1793,13 +1786,13 @@ int main(int argc, char *argv[])
                         result_image = I_rgb_warped;
                     }
                 }
-                else if (_OCRresult.size() < 3 && rOCR_Detect != -1)
+                else if (_OCRresult.size() < predict_times && rOCR_Detect != -1)
                 {
                     auto startTimer_Wait = std::chrono::steady_clock::now();
                     string Text_load = "卡片資料讀取中";
                     for (int i = 0; i < _OCRresult.size(); i++)
                     {
-                        Text_load += "...";
+                        Text_load += ".";
                     }
 
                     // text.putText(Loading_img, w_load, cv::Point(10, 50), cv::Scalar(255, 255, 255));
@@ -1828,7 +1821,7 @@ int main(int argc, char *argv[])
                 TimeOutEnd = std::chrono::steady_clock::now();
                 std::chrono::milliseconds TimeOut = std::chrono::duration_cast<std::chrono::milliseconds>(TimeOutEnd - TimeOutStart);
                 std::cout << "Time Out count: = " << TimeOut.count() << std::endl;
-                if (TimeOut.count() > 4000)
+                if (TimeOut.count() > 5000)
                 {
                     bOCRNG = true;
                 }
@@ -1837,7 +1830,7 @@ int main(int argc, char *argv[])
             cout << " d1:" << d1 << ", d2:" << d2 << "\nCard Type:" << Type_num << ", RFIDOK:" << bRFIDOK << endl;
 
             //卡片取走初始化
-            if (d2 <= 80 && d1 <= 80 && Type_num == -1)
+            if (d2 <= 500 && d1 <= 500 && Type_num == -1)
             {
                 bCardDetect = false;
                 bOCR_Start = false;
