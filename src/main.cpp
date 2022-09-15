@@ -844,7 +844,7 @@ int OCRDetect_integral(CardSet_t Card[], int CardType)
 
         // cout << "Threshold" << endl;
         Mat dst;
-        threshold(gray, dst, 200, 255, THRESH_BINARY);
+        threshold(gray, dst, 190, 255, THRESH_BINARY);
         // imshow("ID Cut threshold", dst);
 
         Mat id_result;
