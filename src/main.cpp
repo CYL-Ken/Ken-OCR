@@ -1311,11 +1311,12 @@ int RFID_Check(SysSet_t Set)
         getline(input_file, line);
 
         cout << "lines.Size:" << line.size() << "  " << line << endl;
-        line.erase(remove(line.begin(), line.end(), '\n'), line.end());
-        line.erase(remove(line.begin(), line.end(), ' '), line.end());
-        CURR_RFID = line;
+        
         if (line.size() != 0)
         {
+            line.erase(remove(line.begin(), line.end(), '\n'), line.end());
+            line.erase(remove(line.begin(), line.end(), ' '), line.end());
+            CURR_RFID = line;
             return 1;
             ////// Future
             // line.erase(remove(line.begin(), line.end(), '\n'), line.end());
