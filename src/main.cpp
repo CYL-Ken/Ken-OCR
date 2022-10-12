@@ -1,7 +1,7 @@
 //============================================================================
 // Name        : OCR
 // Author      : Ken
-// Version     : 1.9.7
+// Version     : 1.9.8
 // Copyright   : CYL-TEK reserved
 // Description : OCR_DEMO
 //============================================================================
@@ -97,6 +97,13 @@ typedef struct SysSet
     int S_max = 255;
     int V_min = 200;
     int V_max = 255;
+
+    float illumination_loc = 0.9;
+    float alpha = 0.2;
+    float beta = 0.4;
+
+    float bottom_area = 0.9;
+    float top_area = 0.885;
 
     int Card_Type_num = 1;
 
@@ -489,6 +496,14 @@ int initSystem(string Set_xml, SysSet_t &Set, CardSet_t Card_set[])
     fs["RFIDPath"] >> Set.RFIDPath;
     fs["SCPRath"] >> Set.SCPRath;
     fs["RTSP_Img"] >> Set.RTSP_Img;
+
+    fs["illumination_loc"] >> Set.illumination_loc;
+    fs["alpha"] >> Set.alpha;
+    fs["beta"] >> Set.beta;
+
+    fs["bottom_area"] >> Set.bottom_area;
+    fs["top_area"] >> Set.top_area;
+
 
     fs["CgmhUrl"] >> Set.CgmhUrl;
 
@@ -1272,7 +1287,7 @@ int OCR(CardSet_t Card[], int CardType, SysSet_t &Set, CvxText &tmp, modelSet_t 
         Text_num[1] = 'S';
         Text_num.erase(remove(Text_num.begin(), Text_num.end(), ' '), Text_num.end());
     }
-    cout << "[OCR Final Result]\n - Name: " << Text_name << "\n - ID: " << Text_num << endl;
+    cout << "[Result]\n - Name: " << Text_name << "\n - ID: " << Text_num << endl;
     cout << " === OCR End === " << endl;
     return 0;
 }
@@ -1296,23 +1311,27 @@ int RFID_Check(SysSet_t Set)
         getline(input_file, line);
 
         cout << "lines.Size:" << line.size() << "  " << line << endl;
+        line.erase(remove(line.begin(), line.end(), '\n'), line.end());
+        line.erase(remove(line.begin(), line.end(), ' '), line.end());
         CURR_RFID = line;
         if (line.size() != 0)
         {
-            line.erase(remove(line.begin(), line.end(), '\n'), line.end());
-            line.erase(remove(line.begin(), line.end(), ' '), line.end());
-            for (int i = 0; i < _RFIDdata.size(); i++)
-            {
-                if (_RFIDdata[i].RFID_UID == line)
-                {
-                    rfid_Text_name = _RFIDdata[i].Name;
+            return 1;
+            ////// Future
+            // line.erase(remove(line.begin(), line.end(), '\n'), line.end());
+            // line.erase(remove(line.begin(), line.end(), ' '), line.end());
+            // for (int i = 0; i < _RFIDdata.size(); i++)
+            // {
+            //     if (_RFIDdata[i].RFID_UID == line)
+            //     {
+            //         rfid_Text_name = _RFIDdata[i].Name;
 
-                    rfid_Text_num = _RFIDdata[i].ID;
-                    cout << "RFID Name:" << rfid_Text_name << endl;
-                    cout << "RFID ID:" << rfid_Text_num << endl;
-                    return 1;
-                }
-            }
+            //         rfid_Text_num = _RFIDdata[i].ID;
+            //         cout << "RFID Name:" << rfid_Text_name << endl;
+            //         cout << "RFID ID:" << rfid_Text_num << endl;
+            //         return 1;
+            //     }
+            // }
         }
         else
         {
@@ -1508,17 +1527,18 @@ int main(int argc, char *argv[])
     if (Seting.bUse_RFID || Seting.bUse_SmartCard)
     {
         RFID_img = Scalar(49, 52, 49);
-        namedWindow("Smart Card Result");
-        moveWindow("Smart Card Result", 0, 1200);
-        setWindowProperty("Smart Card Result", WND_PROP_TOPMOST, WINDOW_GUI_NORMAL);
+        namedWindow("RFID Result");
+        moveWindow("RFID Result", 0, 1200);
+        setWindowProperty("RFID Result", WND_PROP_TOPMOST, WINDOW_GUI_NORMAL);
     }
 
     cout << "[System] Initial UI Complete." << endl;
 
     int predict_times = 4;
-
+    
     while (bOCR)
     {
+        
         // check read frame succeeded
         if (!cap.read(frame))
         {
@@ -1527,692 +1547,746 @@ int main(int argc, char *argv[])
         }
         else
         {
-            // offline
-            if (Seting.offline)
+            try
             {
-                frame = imread(Seting.off_ImgePath);
-            }
-
-            auto ALLstartTimer = std::chrono::steady_clock::now();
-
-            bCardDetect = false;
-            Type_num = -1;
-            rRFID = -1;
-            d1 = 0;
-            d2 = 0;
-
-            ////////RGB Find Card////////////////////////////////////////
-            auto startTimer_FindCard = std::chrono::steady_clock::now();
-
-            Mat rframeImg;
-            frame(FoVRect).copyTo(FoV_img);
-
-            resize(FoV_img, rframeImg, Size(FoV_img.cols / 10, FoV_img.rows / 10), INTER_NEAREST);
-            cvtColor(rframeImg, hsv, COLOR_BGR2HSV); //轉成hsv平面
-
-            inRange(hsv, Scalar(Seting.H_min, Seting.S_min, Seting.V_min), Scalar(Seting.H_max, Seting.S_max, Seting.V_max), r_hsv);
-            Mat mask = Mat::zeros(rframeImg.rows, rframeImg.cols, CV_8U); //為了濾掉其他顏色
-            mask = r_hsv;
-
-            frame.copyTo(dst); //將原圖片經由遮罩過濾後，得到結果dst
-            Mat Processing;
-            // Canny Edge Detection
-            Canny(r_hsv, Processing, 100, 300, 3, true);
-            // Canny(rframeImg, Processing, 150, 300, 3, true);
-
-            // imshow("Processing", Processing);
-
-            RotatedRect resultRect;
-            vector<Vec4i> hierarchy;
-            vector<vector<Point>> contours;
-            findContours(Processing, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE, Point(0, 0));
-            if (contours.size() != 0)
-            {
-                double max = -1;
-                unsigned int max_index = 0;
-                for (unsigned int i = 0; i < contours.size(); i++)
+                // offline
+                if (Seting.offline)
                 {
-                    double area = contourArea(contours[i]);
-                    if (area > max)
+                    frame = imread(Seting.off_ImgePath);
+                }
+
+                auto ALLstartTimer = std::chrono::steady_clock::now();
+
+                bCardDetect = false;
+                Type_num = -1;
+                rRFID = -1;
+                d1 = 0;
+                d2 = 0;
+
+                // RFID Card
+                if (Seting.bUse_RFID)
+                {
+                    rRFID = RFID_Check(Seting);
+                    if (rRFID == -1)
                     {
-                        max = area;
-                        max_index = i;
+                        moveWindow("RFID Result", 0, 1200);
+                        bRFIDOK = false;
+                        bRFIDNG = false;
+                        RFID_send = true;
+                        rRFID = -1;
+                    }
+                    else
+                    {
+                        cout << "Current RFID" << CURR_RFID << endl;
+                        bRFIDOK = true;
+                        // if (rfid_Text_num == "")
+                        //     bRFIDNG = true;
+                        // else
+                        //     bRFIDOK = true;
                     }
                 }
 
-                resultRect = minAreaRect(contours[max_index]); //獲取輪廓的最小外接矩形
-                Point2f pt[4];
-                resultRect.points(pt); //獲取最小外接矩形的四個頂點座標
-                //繪製最小外接矩形
-                line(rframeImg, pt[0], pt[1], Scalar(255, 0, 0), 2, 8);
-                line(rframeImg, pt[1], pt[2], Scalar(255, 0, 0), 2, 8);
-                line(rframeImg, pt[2], pt[3], Scalar(255, 0, 0), 2, 8);
-                line(rframeImg, pt[3], pt[0], Scalar(255, 0, 0), 2, 8);
-                // cout << "*******************************" << endl;
-                // cout << "X座標" << resultRect.center.x << "Y座標" << resultRect.center.y << "偏移角度"<<resultRect.angle<<endl;
-                // cout << "*******************************" << endl;
-                // cout << " === Find Card Result === " << endl;
-                // cout << pt[0] << "," << pt[1] << "," << pt[2] << "," << pt[3] << endl;
-                // cout << " Center:" << resultRect.center.x << "," << resultRect.center.y << endl;
-                // imshow("Line", rframeImg);
-            }
-
-            // Ken
-            auto startTimer_warped = std::chrono::steady_clock::now();
-            resultRect.points(sp);
-            sp[0] = sp[0] * 10;
-            sp[1] = sp[1] * 10;
-            sp[2] = sp[2] * 10;
-            sp[3] = sp[3] * 10;
-            sort(sp, sp + 4, comp);
-            d1 = norm(sp[0] - sp[1]);
-            d2 = norm(sp[0] - sp[2]);
-            /**
-            cout << " sp[0] = " << sp[0] << endl;
-            cout << " sp[1] = " << sp[1] << endl;
-            cout << " sp[2] = " << sp[2] << endl;
-            cout << " sp[3] = " << sp[3] << endl;
-            cout << " d1 = " << d1 << endl;
-            cout << " d2 = " << d2 << endl;
-            **/
-            int bw = int(resultRect.size.width) * 10;
-            int bh = int(resultRect.size.height) * 10;
-            if (bw < bh)
-            {
-                int tmp = bw;
-                bw = bh;
-                bh = tmp;
-            }
-            Mat M;
-            if (sp[0].x > sp[1].x)
-            {
-                Point2f dp[] = {Point2f(bw - 1, 0), Point2f(0, 0), Point2f(bw - 1, bh - 1), Point2f(0, bh - 1)};
-                M = getPerspectiveTransform(sp, dp);
-            }
-            else
-            {
-                Point2f dp[] = {Point2f(0, 0), Point2f(bw - 1, 0), Point2f(0, bh - 1), Point2f(bw - 1, bh - 1)};
-                M = getPerspectiveTransform(sp, dp);
-            }
-
-            // INTER_NEAREST test....
-            // warpPerspective(dst,I_hsv_warped, M, Size(bw, bh));
-
-            warpPerspective(FoV_img, I_rgb_warped, M, Size(bw, bh));
-
-            auto endTimer_warped = std::chrono::steady_clock::now();
-            std::chrono::milliseconds t_msec_warped = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_warped - startTimer_warped);
-            // std::cout << "[Image Process] Find Card: " << t_msec_warped.count() << "msec." << std::endl;
-            ////////RGB Find Card End////////////////////////////////////////
-
-            // RFID Card
-            if (Seting.bUse_RFID)
-            {
-                rRFID = RFID_Check(Seting);
-                if (rRFID == -1)
+                // Smart Card
+                if (Seting.bUse_SmartCard && rRFID == -1)
                 {
-                    moveWindow("Smart Card Result", 0, 1200);
+                    rRFID = SmartCard_Check(Seting);
+                    if (rRFID == -1)
+                    {
+                        moveWindow("Smart Result", 0, 1200);
+                        bRFIDOK = false;
+                        RFID_send = true;
+                    }
+                    else
+                    {
+                        bRFIDOK = true;
+                    }
+                }
+
+                if (CURR_RFID == "START")
+                {
                     bRFIDOK = false;
                     bRFIDNG = false;
-                    RFID_send = true;
-                    rRFID = -1;
                 }
-                else
-                {
-                    cout << "Current RFID" << CURR_RFID << endl;
-                    if (rfid_Text_num == "")
-                        bRFIDNG = true;
-                    else
-                        bRFIDOK = true;
-                }
-            }
 
-            // Smart Card
-            if (Seting.bUse_SmartCard && rRFID == -1)
-            {
-                rRFID = SmartCard_Check(Seting);
-                if (rRFID == -1)
+                //護照判別
+                if (Seting.bUse_PassPort)
                 {
-                    moveWindow("Smart Result", 0, 1200);
-                    bRFIDOK = false;
-                    RFID_send = true;
-                }
-                else
-                {
-                    bRFIDOK = true;
-                }
-            }
-
-            if (CURR_RFID == "START")
-            {
-                bRFIDOK = false;
-                bRFIDNG = false;
-            }
-
-            //卡片種類辨識、旋轉/////////////////////////////////////////////
-            auto startTimer_CardType = std::chrono::steady_clock::now();
-            if (d2 > Seting.Card_PixY && d1 > Seting.Card_PixX && d2 < 1000 && d1 < 2000 || d1 > Seting.Card_PixY && d2 > Seting.Card_PixX && d2 < 2000 && d1 < 1000)
-            {
-                cout << "[Image Process] Find Card Size: (" << d1 << ", " << d2 << ")" << endl;
-                int rType = -1;
-                //辨識卡片種類結果
-                rType = CardType_Rotate_model(frame, I_rgb_warped, I_hsv_warped, Card[0].TempScore, Model_Set);
-                if (rType != -1)
-                {
-                    bCardDetect = true;
-                    Type_num = rType;
-                    // cout << "[Card] Card Type:" << Type_num << endl;
-                    if (bOCR_End)
+                    cout << "Passport D1:" << d1 << endl;
+                    if (d1 > Seting.PassPort_PixX)
                     {
-                        TimeOutStart = std::chrono::steady_clock::now();
-                        bOCR_Start = true;
-                        bOCR_End = false;
-                        cout << " -> OCR_Start" << endl;
+                        Mat port;
+                        Point Port_pt1, Port_pt2;
+
+                        Port_pt1 = sp[0];
+                        Port_pt2 = sp[1];
+                        Port_pt2.y = FoV_img.rows;
+
+                        Rect PortRect(Port_pt1, Port_pt2);
+                        FoV_img(PortRect).copyTo(port);
+                        imshow("PassPort_rgb_", port);
+                        // imshow("HSV", r_hsv);
+                        // imshow("Processing", Processing);
+                        // if (waitKey(0)) break;
                     }
                 }
-                if (rType == -1 && bOCR_End)
+
+                ////////RGB Find Card////////////////////////////////////////
+                auto start_find_card = std::chrono::steady_clock::now();
+
+                Mat rframeImg;
+                frame(FoVRect).copyTo(FoV_img);
+                // Mat FoV_frame;
+                // Mat mask = Mat::zeros(FoV_img.size(), FoV_img.type());
+                // Rect mask_rect(Seting.Fov_X, Seting.Fov_H-20, Seting.Fov_W, Seting.Fov_H);
+                // rectangle(mask, mask_rect, Scalar(255, 255, 255), 1);
+                // illuminationChange(FoV_img, mask, FoV_frame, 0.2f, 0.4f);
+                
+
+                resize(FoV_img, rframeImg, Size(FoV_img.cols / 10, FoV_img.rows / 10), INTER_NEAREST);
+
+                //Test
+                Mat result_frame;
+                // Mat mask = Mat::zeros(rframeImg.size(), rframeImg.type());
+                // cout << rframeImg.cols << ", " << rframeImg.rows;
+                rframeImg.copyTo(result_frame);
+                Rect bottom_area(0, rframeImg.rows*Seting.bottom_area, rframeImg.cols, rframeImg.rows);
+                Rect top_area(0, 0, rframeImg.cols, rframeImg.rows*Seting.top_area);
+                rectangle(result_frame, bottom_area, Scalar(0, 0, 0), -1);
+                rectangle(result_frame, top_area, Scalar(0, 0, 0), -1);
+                
+                // illuminationChange(rframeImg, mask, result_frame, Seting.alpha, Seting.beta); 
+                
+                // imshow("mask", mask);
+                // imshow("raw", rframeImg);
+                // imshow("illu", result_frame);
+                
+
+                cvtColor(result_frame, hsv, COLOR_BGR2HSV); //轉成hsv平面
+
+                inRange(hsv, Scalar(Seting.H_min, Seting.S_min, Seting.V_min), Scalar(Seting.H_max, Seting.S_max, Seting.V_max), r_hsv);
+                // Mat mask = Mat::zeros(rframeImg.rows, rframeImg.cols, CV_8U); //為了濾掉其他顏色
+                // mask = r_hsv;
+
+                // Mat gray_frame;
+                // cvtColor(rframeImg, gray_frame, COLOR_BGR2GRAY);
+
+                frame.copyTo(dst); //將原圖片經由遮罩過濾後，得到結果dst
+                Mat Processing;
+                // Canny Edge Detection
+                // imshow("HSV", r_hsv);
+                // imshow("GRAY", gray_frame);
+                Canny(r_hsv, Processing, 100, 300, 3, true);
+                // Canny(rframeImg, Processing, 150, 300, 3, true);
+
+                // imshow("Processing", Processing);
+
+                RotatedRect resultRect;
+                vector<Vec4i> hierarchy;
+                vector<vector<Point>> contours;
+                findContours(Processing, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE, Point(0, 0));
+                if (contours.size() != 0)
                 {
-                    cout << "[Card] Not HID or ID Card!" << endl;
-                    bOCR_Start = false;
-                    bCardDetect = false;
-                    bOCRNG = true;
+                    double max = -1;
+                    unsigned int max_index = 0;
+                    for (unsigned int i = 0; i < contours.size(); i++)
+                    {
+                        double area = contourArea(contours[i]);
+                        if (area > max)
+                        {
+                            max = area;
+                            max_index = i;
+                        }
+                    }
+
+                    resultRect = minAreaRect(contours[max_index]); //獲取輪廓的最小外接矩形
+                    Point2f pt[4];
+                    resultRect.points(pt); //獲取最小外接矩形的四個頂點座標
+                    //繪製最小外接矩形
+                    line(rframeImg, pt[0], pt[1], Scalar(255, 0, 0), 2, 8);
+                    line(rframeImg, pt[1], pt[2], Scalar(255, 0, 0), 2, 8);
+                    line(rframeImg, pt[2], pt[3], Scalar(255, 0, 0), 2, 8);
+                    line(rframeImg, pt[3], pt[0], Scalar(255, 0, 0), 2, 8);
+                    // cout << "*******************************" << endl;
+                    // cout << "X座標" << resultRect.center.x << "Y座標" << resultRect.center.y << "偏移角度"<<resultRect.angle<<endl;
+                    // cout << "*******************************" << endl;
+                    // cout << " === Find Card Result === " << endl;
+                    // cout << pt[0] << "," << pt[1] << "," << pt[2] << "," << pt[3] << endl;
+                    // cout << " Center:" << resultRect.center.x << "," << resultRect.center.y << endl;
+                    // imshow("Line", rframeImg);
                 }
-            }
 
-            //護照判別
-            if (Seting.bUse_PassPort)
-            {
-                cout << "Passport D1:" << d1 << endl;
-                if (d1 > Seting.PassPort_PixX)
+                // Ken
+                auto startTimer_warped = std::chrono::steady_clock::now();
+                resultRect.points(sp);
+                sp[0] = sp[0] * 10;
+                sp[1] = sp[1] * 10;
+                sp[2] = sp[2] * 10;
+                sp[3] = sp[3] * 10;
+                sort(sp, sp + 4, comp);
+                d1 = norm(sp[0] - sp[1]);
+                d2 = norm(sp[0] - sp[2]);
+                /**
+                cout << " sp[0] = " << sp[0] << endl;
+                cout << " sp[1] = " << sp[1] << endl;
+                cout << " sp[2] = " << sp[2] << endl;
+                cout << " sp[3] = " << sp[3] << endl;
+                cout << " d1 = " << d1 << endl;
+                cout << " d2 = " << d2 << endl;
+                **/
+                int bw = int(resultRect.size.width) * 10;
+                int bh = int(resultRect.size.height) * 10;
+                if (bw < bh)
                 {
-                    Mat port;
-                    Point Port_pt1, Port_pt2;
-
-                    Port_pt1 = sp[0];
-                    Port_pt2 = sp[1];
-                    Port_pt2.y = FoV_img.rows;
-
-                    Rect PortRect(Port_pt1, Port_pt2);
-                    FoV_img(PortRect).copyTo(port);
-                    imshow("PassPort_rgb_", port);
-                    // imshow("HSV", r_hsv);
-                    // imshow("Processing", Processing);
-                    // if (waitKey(0)) break;
+                    int tmp = bw;
+                    bw = bh;
+                    bh = tmp;
                 }
-            }
-
-            auto endTimer_CardType = std::chrono::steady_clock::now();
-            std::chrono::milliseconds t_msec_CardType = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_CardType - startTimer_CardType);
-            std::cout << "[Image Process] Find Card took: " << t_msec_CardType.count() << "ms." << std::endl;
-
-            cout << "===== DEBUG (WARN or NG) =====\n| bCardDetect:" << bCardDetect << ", bOCR_Start:" << bOCR_Start << ", bOCROK:" << bOCROK << endl;
-            if (d1 > 500 && d2 > 500 && !bCardDetect && !bOCR_Start && !bOCROK)
-            {
-                cout << " - Not detect card but get some card\n - Check Position" << endl;
-                bWarn = true;
-            }
-
-            //開始OCR辨識
-            auto startTimer_OCRALL = std::chrono::steady_clock::now();
-
-            if (bCardDetect && bOCR_Start)
-            {
-                int rOCR_Detect;
-
-                // OCR ID Name ROI bounding
-                auto startTimer_OCRDetect = std::chrono::steady_clock::now();
-                // cout << "OCR Type" << Type_num << endl;
-                rOCR_Detect = OCRDetect_integral(Card, Type_num);
-                // imshow("I_hsv_warped",I_hsv_warped);
-                auto endTimer_OCRDetect = std::chrono::steady_clock::now();
-                std::chrono::milliseconds t_msec_OCRDetect = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_OCRDetect - startTimer_OCRDetect);
-                std::cout << "[Process Time] Find Target:" << t_msec_OCRDetect.count() << "msec." << std::endl;
-                // imshow("I_rgb_warped",I_rgb_warped);
-                // OCR
-                if (rOCR_Detect == -1)
+                Mat M;
+                if (sp[0].x > sp[1].x)
                 {
-                    cout << " -> OCR Detect NG" << endl;
-                    bOCR_Start = false;
-                    bOCRNG = true;
+                    Point2f dp[] = {Point2f(bw - 1, 0), Point2f(0, 0), Point2f(bw - 1, bh - 1), Point2f(0, bh - 1)};
+                    M = getPerspectiveTransform(sp, dp);
                 }
                 else
                 {
-                    auto startTimer_OCR = std::chrono::steady_clock::now();
-                    cout << " -> Start Recognition" << endl;
-                    OCR(Card, Type_num, Seting, text, OcRModel_Set);
-                    auto endTimer_OCR = std::chrono::steady_clock::now();
-                    std::chrono::milliseconds t_msec_OCR = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_OCR - startTimer_OCR);
-                    std::cout << "[Process Time] OCR: " << t_msec_OCR.count() << "msec." << std::endl;
-                    OCRresult_t OCR_R;
-                    OCR_R.Name = Text_name;
-                    OCR_R.ID = Text_num;
-                    _OCRresult.push_back(OCR_R);
-                    // cout << "_OCRresult.size()" << _OCRresult.size() <<endl;
+                    Point2f dp[] = {Point2f(0, 0), Point2f(bw - 1, 0), Point2f(0, bh - 1), Point2f(bw - 1, bh - 1)};
+                    M = getPerspectiveTransform(sp, dp);
                 }
 
-                // OCR 幾次後比較
-                if (_OCRresult.size() >= predict_times)
+                // INTER_NEAREST test....
+                // warpPerspective(dst,I_hsv_warped, M, Size(bw, bh));
+
+                warpPerspective(FoV_img, I_rgb_warped, M, Size(bw, bh));
+
+                auto end_find_card_RGB = std::chrono::steady_clock::now();
+                std::chrono::milliseconds t_msec_warped = std::chrono::duration_cast<std::chrono::milliseconds>(end_find_card_RGB - start_find_card);
+                std::cout << "[Image Process] RGB Find Card: " << t_msec_warped.count() << " ms." << std::endl;
+                ////////RGB Find Card End////////////////////////////////////////
+
+
+                //卡片種類辨識、旋轉/////////////////////////////////////////////
+                auto start_find_card_type = std::chrono::steady_clock::now();
+                if (d2 > Seting.Card_PixY && d1 > Seting.Card_PixX && d2 < 1000 && d1 < 2000 || d1 > Seting.Card_PixY && d2 > Seting.Card_PixX && d2 < 2000 && d1 < 1000)
                 {
-                    /**
-                    if (_OCRresult[0].Name == _OCRresult[1].Name)
-                        Text_name = _OCRresult[0].Name;
-                    else if (_OCRresult[0].Name == _OCRresult[2].Name)
-                        Text_name = _OCRresult[0].Name;
-                    else if (_OCRresult[1].Name == _OCRresult[2].Name)
-                        Text_name = _OCRresult[1].Name;
-                    else
-                        Text_name = "";
-
-                    if (_OCRresult[0].ID == _OCRresult[1].ID)
-                        Text_num = _OCRresult[0].ID;
-                    else if (_OCRresult[0].ID == _OCRresult[2].ID)
-                        Text_num = _OCRresult[0].ID;
-                    else if (_OCRresult[1].ID == _OCRresult[2].ID)
-                        Text_num = _OCRresult[1].ID;
-                    else
-                        Text_num = "";
-                    **/
-                    Text_name = _OCRresult[predict_times - 1].Name;
-                    Text_num = _OCRresult[predict_times - 1].ID;
-
-                    cout << "[Result] Name:" << Text_name << ", ID:" << Text_num << endl;
-
-                    if (Text_name.empty() || Text_num.empty())
+                    cout << "[Image Process] Find Card!! Card Size: (" << d1 << ", " << d2 << ")" << endl;
+                    int rType = -1;
+                    //辨識卡片種類結果
+                    rType = CardType_Rotate_model(frame, I_rgb_warped, I_hsv_warped, Card[0].TempScore, Model_Set);
+                    if (rType == 0)
                     {
-                        cout << " - OCR NG\nName:" << Text_name << ", ID:" << Text_num << endl;
+                        bCardDetect = true;
+                        Type_num = rType;
+                        // cout << "[Card] Card Type:" << Type_num << endl;
+                        if (bOCR_End)
+                        {
+                            TimeOutStart = std::chrono::steady_clock::now();
+                            bOCR_Start = true;
+                            bOCR_End = false;
+                            //cout << "[System] Start OCR_Start" << endl;
+                        }
+                    }
+                    else if (bOCR_End)
+                    {
+                        cout << "[Card] Invalid Card!" << endl;
+                        bOCR_Start = false;
+                        bCardDetect = false;
+                        bOCRNG = true;
+                    }
+                }
+            
+
+                auto end_find_card_type = std::chrono::steady_clock::now();
+                std::chrono::milliseconds t_msec_CardType = std::chrono::duration_cast<std::chrono::milliseconds>(end_find_card_type - start_find_card_type);
+                std::chrono::milliseconds t_msec_FullFindCard = std::chrono::duration_cast<std::chrono::milliseconds>(end_find_card_type - start_find_card);
+                std::cout << "[Image Process] Find Card Type took: " << t_msec_CardType.count() << " ms." << std::endl;
+                std::cout << "[Image Process] Find Card Full Function took: " << t_msec_FullFindCard.count() << " ms." << std::endl;
+
+
+                cout << "===== DEBUG (WARN or NG) =====\n| bCardDetect:" << bCardDetect << ", bOCR_Start:" << bOCR_Start << ", bOCROK:" << bOCROK << endl;
+                if (d1 > 500 && d2 > 500 && !bCardDetect && !bOCR_Start && !bOCROK)
+                {
+                    cout << " - Not detect card but get some card\n - Check Position" << endl;
+                    bWarn = true;
+                }
+
+                //開始OCR辨識
+                auto start_OCR = std::chrono::steady_clock::now();
+
+                if (bCardDetect && bOCR_Start)
+                {
+                    int rOCR_Detect;
+
+                    // OCR ID Name ROI bounding
+                    auto startTimer_OCRDetect = std::chrono::steady_clock::now();
+                    // cout << "OCR Type" << Type_num << endl;
+                    rOCR_Detect = OCRDetect_integral(Card, Type_num);
+                    // imshow("I_hsv_warped",I_hsv_warped);
+                    auto endTimer_OCRDetect = std::chrono::steady_clock::now();
+                    std::chrono::milliseconds t_msec_OCRDetect = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_OCRDetect - startTimer_OCRDetect);
+                    std::cout << "[Process Time] Find Target took:" << t_msec_OCRDetect.count() << " ms." << std::endl;
+                    // imshow("I_rgb_warped",I_rgb_warped);
+                    // OCR
+                    if (rOCR_Detect == -1)
+                    {
+                        cout << " -> OCR Detect NG" << endl;
+                        bOCR_Start = false;
                         bOCRNG = true;
                     }
                     else
                     {
-                        bOCR_Start = false;
-                        bOCROK = true;
-                        // cout << "_OCRresult[0]" << _OCRresult[0].Name << endl;
-                        // cout << "_OCRresult[1]" << _OCRresult[1].Name << endl;
-                        // cout << "_OCRresult[2]" << _OCRresult[2].Name << endl;
-                        result_image = I_rgb_warped;
-                    }
-                }
-                else if (_OCRresult.size() < predict_times && rOCR_Detect != -1)
-                {
-                    auto startTimer_Wait = std::chrono::steady_clock::now();
-                    string Text_load = "卡片資料讀取中";
-                    for (int i = 0; i < _OCRresult.size(); i++)
-                    {
-                        Text_load += ".";
+                        auto startTimer_OCR = std::chrono::steady_clock::now();
+                        cout << "[Model] Start Recognition" << endl;
+                        OCR(Card, Type_num, Seting, text, OcRModel_Set);
+                        auto endTimer_OCR = std::chrono::steady_clock::now();
+                        std::chrono::milliseconds t_msec_OCR = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_OCR - startTimer_OCR);
+                        std::cout << "[Process Time] OCR Model took: " << t_msec_OCR.count() << " ms." << std::endl;
+                        OCRresult_t OCR_R;
+                        OCR_R.Name = Text_name;
+                        OCR_R.ID = Text_num;
+                        _OCRresult.push_back(OCR_R);
+                        // cout << "_OCRresult.size()" << _OCRresult.size() <<endl;
                     }
 
-                    // text.putText(Loading_img, w_load, cv::Point(10, 50), cv::Scalar(255, 255, 255));
+                    // OCR 幾次後比較
+                    if (_OCRresult.size() >= predict_times)
+                    {
+                        /**
+                        if (_OCRresult[0].Name == _OCRresult[1].Name)
+                            Text_name = _OCRresult[0].Name;
+                        else if (_OCRresult[0].Name == _OCRresult[2].Name)
+                            Text_name = _OCRresult[0].Name;
+                        else if (_OCRresult[1].Name == _OCRresult[2].Name)
+                            Text_name = _OCRresult[1].Name;
+                        else
+                            Text_name = "";
+
+                        if (_OCRresult[0].ID == _OCRresult[1].ID)
+                            Text_num = _OCRresult[0].ID;
+                        else if (_OCRresult[0].ID == _OCRresult[2].ID)
+                            Text_num = _OCRresult[0].ID;
+                        else if (_OCRresult[1].ID == _OCRresult[2].ID)
+                            Text_num = _OCRresult[1].ID;
+                        else
+                            Text_num = "";
+                        **/
+                        Text_name = _OCRresult[predict_times - 1].Name;
+                        Text_num = _OCRresult[predict_times - 1].ID;
+
+                        cout << "[OCR Final Result] Name:" << Text_name << ", ID:" << Text_num << endl;
+
+                        if (Text_name.empty() || Text_num.empty() || Text_num.length() != 10)
+                        {
+                            cout << " - OCR NG\nName:" << Text_name << ", ID:" << Text_num << endl;
+                            bOCRNG = true;
+                        }
+                        else
+                        {
+                            bOCR_Start = false;
+                            bOCROK = true;
+                            // cout << "_OCRresult[0]" << _OCRresult[0].Name << endl;
+                            // cout << "_OCRresult[1]" << _OCRresult[1].Name << endl;
+                            // cout << "_OCRresult[2]" << _OCRresult[2].Name << endl;
+                            result_image = I_rgb_warped;
+                        }
+                    }
+                    else if (_OCRresult.size() < predict_times && rOCR_Detect != -1)
+                    {
+                        string Text_load = "卡片資料讀取中";
+                        for (int i = 0; i < _OCRresult.size(); i++)
+                        {
+                            Text_load += ".";
+                        }
+
+                        // text.putText(Loading_img, w_load, cv::Point(10, 50), cv::Scalar(255, 255, 255));
+                        ft2->putText(Loading_img, Text_load, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
+
+                        imshow("OCR Result", Loading_img);
+                        moveWindow("OCR Result", 0, 750);
+                    }
+                }
+                // else
+                // {
+                //     cout << "[System] Finish Detection\n| - Name:" << Text_name << ", ID:" << Text_num << "\n| - OCRNG:" << bOCRNG << endl;
+                // }
+                auto end_OCR = std::chrono::steady_clock::now();
+                std::chrono::milliseconds t_msec_OCRALL = std::chrono::duration_cast<std::chrono::milliseconds>(end_OCR - start_OCR);
+                std::cout << "[Process Time] Target Recognition took " << t_msec_OCRALL.count() << " ms." << std::endl;
+
+                // Confirmation timed out
+                if (bOCR_Start)
+                {
+                    TimeOutEnd = std::chrono::steady_clock::now();
+                    std::chrono::milliseconds TimeOut = std::chrono::duration_cast<std::chrono::milliseconds>(TimeOutEnd - TimeOutStart);
+                    // std::cout << "Time Out count: = " << TimeOut.count() << std::endl;
+                    if (TimeOut.count() > 5000)
+                    {
+                        cout << "OCR Timeout." << endl;
+                        bOCRNG = true;
+                    }
+                }
+                cout << " === Reset Check === " << endl;
+                cout << " d1:" << d1 << ", d2:" << d2 << "\nCard Type:" << Type_num << ", RFIDOK:" << bRFIDOK << endl;
+
+                //卡片取走初始化
+                if (d2 <= 500 && d1 <= 500 && Type_num == -1)
+                {
+                    bCardDetect = false;
+                    bOCR_Start = false;
+                    bOCR_End = true;
+                    bOCRNG = false;
+                    bOCROK = false;
+                    OCR_img = Mat(250, 768, CV_8UC3);
+                    OCR_img = Scalar(49, 52, 49);
+                    // RFID_img=Mat(250, 768, CV_8UC3);
+                    // RFID_img=Scalar(49, 52, 49);
+                    Loading_img = Mat(250, 768, CV_8UC3);
+                    Loading_img = Scalar(49, 52, 49);
+                    Text_name = "";
+                    Text_num = "";
+                    rfid_Text_name = "";
+                    rfid_Text_num = "";
+                    rRect = RotatedRect(Point2f(0, 0), Size2f(0, 0), 0);
+                    cout << "[System] Reset OCR" << endl;
+                    _OCRresult.clear();
+                    moveWindow("OCR Result", 0, 1200);
+                    // moveWindow("Loading card data...", 0, 1200);
+                }
+
+                if (!bRFIDOK || (CURR_RFID != "" && CURR_RFID != PREV_RFID))
+                {
+
+                    RFID_img = Mat(250, 768, CV_8UC3);
+                    RFID_img = Scalar(49, 52, 49);
+
+                    cout << "[System] Reset RFID" << endl;
+                    PREV_RFID = CURR_RFID;
+                    //ft2->putText(RFID_img, "卡片讀取中...", cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
+                    moveWindow("RFID Result", 0, 1200);
+                    
+                }
+
+                if (bWarn)
+                {
+                    // cout << "======Warn======" << endl;
+                    // cout << "instruction.size()" << instruction.size() << endl;
+                    string ng_text = "請檢查卡片位置";
+                    ft2->putText(Warn_img, ng_text, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
+
+                    Mat RoiImg, GrayImg, MaskImg, InvMaskImg;
+                    cvtColor(instruction, GrayImg, COLOR_BGR2GRAY);
+                    threshold(GrayImg, MaskImg, 0, 255, THRESH_BINARY);
+                    bitwise_not(MaskImg, InvMaskImg);
+                    InvMaskImg = 255 - InvMaskImg;
+                    RoiImg = Warn_img(Rect(400, 10, instruction.cols, instruction.rows));
+                    instruction.copyTo(RoiImg, InvMaskImg);
+
+                    imshow("OCR Result", Warn_img);
+                    moveWindow("OCR Result", 0, 750);
+                    bWarn = false;
+                }
+
+                // OCR OK/NG顯示
+                auto startTimer_OCROKNG = std::chrono::steady_clock::now();
+                if (bOCROK && !Text_name.empty() && !Text_num.empty() && !bRFIDOK)
+                {
+                    // Try to change result picture
+                    resize(result_image, r_frame, Size(320, 240), INTER_NEAREST);
+                    // resize(I_rgb_warped, r_frame, Size(320,240), INTER_NEAREST);
+                    // resize(frame,r_frame , Size(320,240),INTER_NEAREST);
+
+                    rText_name = "MR./MS.: " + Text_name.substr(0, 3);
+                    ft2->putText(OCR_img, rText_name, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
+
+                    rText_num = "ID: " + Text_num;
+                    ft2->putText(OCR_img, rText_num, cv::Point(10, 120), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
+
+                    string rstr = "請收回證件";
+                    ft2->putText(OCR_img, rstr, cv::Point(10, 190), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
+
+                    // moveWindow("Loading card data...", 0, 1200);
+                    Mat RoiImg, GrayImg, MaskImg, InvMaskImg;
+                    moveWindow("OCR Result", 0, 750);
+                    cvtColor(r_frame, GrayImg, COLOR_BGR2GRAY);
+                    threshold(GrayImg, MaskImg, 0, 255, THRESH_BINARY);
+                    bitwise_not(MaskImg, InvMaskImg);
+                    InvMaskImg = 255 - InvMaskImg;
+                    RoiImg = OCR_img(Rect(400, 10, r_frame.cols, r_frame.rows));
+                    r_frame.copyTo(RoiImg, InvMaskImg);
+                    imshow("OCR Result", OCR_img);
+
+                    // Send Data
+                    string Data = getCurrentSystemTime();
+                    if (Seting.send_commd)
+                    {
+                        cout << "SendOCR_result " << endl;
+                        // string i500Ip, string fileDst
+                        sender.getI500Data(Seting.SCPRath, "/data/i500result.txt");
+                        // string lastName, string timeStamp, string personId
+                        cout << " - lastName: " << Text_name << endl;
+                        cout << " - timeStamp: " << Data << endl;
+                        cout << " - personId: " << Text_num << endl;
+                        sender.genData(Text_name, Data, Text_num);
+                        // cv::Mat faceFrame, cv::Mat idCardFrame
+                        sender.writeRequiredImg(I_rgb_warped, I_hsv_warped);
+                        // string cgmhUrl
+                        sender.sendCgmhData(Seting.CgmhUrl);
+                        // sender.sendCgmhDataTEST(Seting.CgmhUrl,"A123456789_data.json");
+                        // SendOCR_result(Seting);
+                    }
+                }
+                if (bOCRNG)
+                {
+                    Loading_img = Mat(250, 768, CV_8UC3);
+                    Loading_img = Scalar(49, 52, 49);
+                    string Text_load = "請重新放置卡片";
                     ft2->putText(Loading_img, Text_load, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
 
                     imshow("OCR Result", Loading_img);
                     moveWindow("OCR Result", 0, 750);
-                    auto endTimer_Wait = std::chrono::steady_clock::now();
-                    std::chrono::milliseconds t_msec_Wait = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_Wait - startTimer_Wait);
-                    std::cout << "Wait msec = " << t_msec_Wait.count() << std::endl;
-                }
-            }
-            // else
-            // {
-            //     cout << "[System] Finish Detection\n| - Name:" << Text_name << ", ID:" << Text_num << "\n| - OCRNG:" << bOCRNG << endl;
-            // }
-            auto endTimer_OCRALL = std::chrono::steady_clock::now();
-            std::chrono::milliseconds t_msec_OCRALL = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_OCRALL - startTimer_OCRALL);
-            std::cout << "[Process Time] Target Detection took " << t_msec_OCRALL.count() << "ms." << std::endl;
-
-            // Confirmation timed out
-            if (bOCR_Start)
-            {
-                TimeOutEnd = std::chrono::steady_clock::now();
-                std::chrono::milliseconds TimeOut = std::chrono::duration_cast<std::chrono::milliseconds>(TimeOutEnd - TimeOutStart);
-                // std::cout << "Time Out count: = " << TimeOut.count() << std::endl;
-                if (TimeOut.count() > 5000)
-                {
-                    bOCRNG = true;
-                }
-            }
-            cout << " === Reset Check === " << endl;
-            cout << " d1:" << d1 << ", d2:" << d2 << "\nCard Type:" << Type_num << ", RFIDOK:" << bRFIDOK << endl;
-
-            //卡片取走初始化
-            if (d2 <= 500 && d1 <= 500 && Type_num == -1)
-            {
-                bCardDetect = false;
-                bOCR_Start = false;
-                bOCR_End = true;
-                bOCRNG = false;
-                bOCROK = false;
-                OCR_img = Mat(250, 768, CV_8UC3);
-                OCR_img = Scalar(49, 52, 49);
-                // RFID_img=Mat(250, 768, CV_8UC3);
-                // RFID_img=Scalar(49, 52, 49);
-                Loading_img = Mat(250, 768, CV_8UC3);
-                Loading_img = Scalar(49, 52, 49);
-                Text_name = "";
-                Text_num = "";
-                rfid_Text_name = "";
-                rfid_Text_num = "";
-                rRect = RotatedRect(Point2f(0, 0), Size2f(0, 0), 0);
-                cout << "[System] Reset OCR" << endl;
-                _OCRresult.clear();
-                moveWindow("OCR Result", 0, 1200);
-                // moveWindow("Loading card data...", 0, 1200);
-            }
-
-            if (!bRFIDOK || (CURR_RFID != "" && CURR_RFID != PREV_RFID))
-            {
-
-                RFID_img = Mat(250, 768, CV_8UC3);
-                RFID_img = Scalar(49, 52, 49);
-
-                cout << "[System] Reset RFID" << endl;
-                PREV_RFID = CURR_RFID;
-                moveWindow("Smart Card Result", 0, 1200);
-                moveWindow("Loading card data...", 0, 1200);
-            }
-
-            if (bWarn)
-            {
-                // cout << "======Warn======" << endl;
-                // cout << "instruction.size()" << instruction.size() << endl;
-                string ng_text = "請檢查卡片位置";
-                ft2->putText(Warn_img, ng_text, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
-
-                Mat RoiImg, GrayImg, MaskImg, InvMaskImg;
-                cvtColor(instruction, GrayImg, COLOR_BGR2GRAY);
-                threshold(GrayImg, MaskImg, 0, 255, THRESH_BINARY);
-                bitwise_not(MaskImg, InvMaskImg);
-                InvMaskImg = 255 - InvMaskImg;
-                RoiImg = Warn_img(Rect(400, 10, instruction.cols, instruction.rows));
-                instruction.copyTo(RoiImg, InvMaskImg);
-
-                imshow("OCR Result", Warn_img);
-                moveWindow("OCR Result", 0, 750);
-                bWarn = false;
-            }
-
-            // OCR OK/NG顯示
-            auto startTimer_OCROKNG = std::chrono::steady_clock::now();
-            if (bOCROK && !Text_name.empty() && !Text_num.empty())
-            {
-                // Try to change result picture
-                resize(result_image, r_frame, Size(320, 240), INTER_NEAREST);
-                // resize(I_rgb_warped, r_frame, Size(320,240), INTER_NEAREST);
-                // resize(frame,r_frame , Size(320,240),INTER_NEAREST);
-
-                rText_name = "MR./MS.: " + Text_name.substr(0, 3);
-                ft2->putText(OCR_img, rText_name, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
-
-                rText_num = "ID: " + Text_num;
-                ft2->putText(OCR_img, rText_num, cv::Point(10, 120), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
-
-                string rstr = "請收回證件";
-                ft2->putText(OCR_img, rstr, cv::Point(10, 190), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
-
-                // moveWindow("Loading card data...", 0, 1200);
-                Mat RoiImg, GrayImg, MaskImg, InvMaskImg;
-                moveWindow("OCR Result", 0, 750);
-                cvtColor(r_frame, GrayImg, COLOR_BGR2GRAY);
-                threshold(GrayImg, MaskImg, 0, 255, THRESH_BINARY);
-                bitwise_not(MaskImg, InvMaskImg);
-                InvMaskImg = 255 - InvMaskImg;
-                RoiImg = OCR_img(Rect(400, 10, r_frame.cols, r_frame.rows));
-                r_frame.copyTo(RoiImg, InvMaskImg);
-                imshow("OCR Result", OCR_img);
-
-                // Send Data
-                string Data = getCurrentSystemTime();
-                if (Seting.send_commd)
-                {
-                    cout << "SendOCR_result " << endl;
-                    // string i500Ip, string fileDst
-                    sender.getI500Data(Seting.SCPRath, "/data/i500result.txt");
-                    // string lastName, string timeStamp, string personId
-                    cout << " - lastName: " << Text_name << endl;
-                    cout << " - timeStamp: " << Data << endl;
-                    cout << " - personId: " << Text_num << endl;
-                    sender.genData(Text_name, Data, Text_num);
-                    // cv::Mat faceFrame, cv::Mat idCardFrame
-                    sender.writeRequiredImg(I_rgb_warped, I_hsv_warped);
-                    // string cgmhUrl
-                    sender.sendCgmhData(Seting.CgmhUrl);
-                    // sender.sendCgmhDataTEST(Seting.CgmhUrl,"A123456789_data.json");
-                    // SendOCR_result(Seting);
-                }
-            }
-            if (bOCRNG)
-            {
-                Loading_img = Mat(250, 768, CV_8UC3);
-                Loading_img = Scalar(49, 52, 49);
-                string Text_load = "請重新放置卡片";
-                ft2->putText(Loading_img, Text_load, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
-
-                imshow("OCR Result", Loading_img);
-                moveWindow("OCR Result", 0, 750);
-                if (Seting.bSave_Img)
-                {
-                    cout << "Save NG Data" << endl;
-                    string Data = getCurrentSystemTime();
-                    if (!dst.empty())
+                    if (Seting.bSave_Img)
                     {
-                        imwrite("./NG/" + Data + "_src.jpg", dst);
-                    }
-                }
-            }
-
-            auto endTimer_OCROKNG = std::chrono::steady_clock::now();
-            std::chrono::milliseconds t_msec_OCROKNG = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_OCROKNG - startTimer_OCROKNG);
-            std::cout << "[Process Time] OCR Result Window took " << t_msec_OCROKNG.count() << "ms." << std::endl;
-            // RFID OK
-            // cout << "RFIDOK:" << bRFIDOK << endl;
-            if (bRFIDOK && CURR_RFID != "START")
-            {
-                // ifstream inFile;
-                // inFile.open("i500result.txt"); //open the input file
-                // stringstream strStream;
-                // strStream << inFile.rdbuf(); //read the file
-                // string str = strStream.str(); //str holds the content of the file
-                // str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
-                // string delimiter = ",";
-                // string _temperature = str.substr(str.find(delimiter) + 1 , -1);
-                // inFile.close();
-
-                // resize(frame,r_frame , Size(320,240),INTER_NEAREST);
-                // putText(RFID_img, _temperature, cv::Point(400, 50),cv::FONT_HERSHEY_COMPLEX,2, cv::Scalar(0, 255, 0),3);
-                rfid_text_name = "MR./MS.:" + rfid_Text_name;
-                std::cout << rfid_text_name << std::endl;
-                ft2->putText(RFID_img, rfid_text_name, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
-
-                rfid_text_id = "ID: " + rfid_Text_num;
-                std::cout << rfid_text_id << std::endl;
-                ft2->putText(RFID_img, rfid_text_id, cv::Point(10, 120), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
-
-                string rstr = "請收回證件";
-                ft2->putText(RFID_img, rstr, cv::Point(10, 190), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
-
-                // moveWindow("Loading card data...", 0, 1200);
-                Mat RoiImg, GrayImg, MaskImg, InvMaskImg;
-                moveWindow("Smart Card Result", 0, 750);
-                imshow("Smart Card Result", RFID_img);
-                string Data = getCurrentSystemTime();
-                // waitKey(0);
-                if (Seting.send_commd && RFID_send)
-                {
-                    cout << "SendOCR_result " << endl;
-                    // SendOCR_result(Seting);
-                    RFID_send = false;
-                }
-            }
-            if (bRFIDNG)
-            {
-                Loading_img = Mat(250, 768, CV_8UC3);
-                Loading_img = Scalar(49, 52, 49);
-                string Text_load = "卡片 未登入";
-                ft2->putText(Loading_img, Text_load, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
-                imshow("Smart Card Result", Loading_img);
-                moveWindow("Smart Card Result", 0, 750);
-            }
-
-            auto startTimer_showUI = std::chrono::steady_clock::now();
-
-            if (Seting.show_r)
-            {
-
-                Mat r_rgb_warped;
-                resize(frame, r_frame, Size(320, 240), INTER_NEAREST);
-                if (!I_rgb_warped.empty())
-                    resize(I_rgb_warped, r_rgb_warped, Size(320, 240), INTER_NEAREST);
-
-                /**
-                rText_name = "Name: " + Text_name;
-                char *cname = (char *)rText_name.c_str();
-
-                wchar_t *wname;
-                ToWchar(cname, wname);
-                // text.putText(OCR_img, wname, cv::Point(10, 50), cv::Scalar(255, 255, 255));
-
-                rText_num = "ID: " + Text_num;
-                char *cID = (char *)rText_num.c_str();
-                wchar_t *wID;
-                ToWchar(cID, wID);
-                // text.putText(OCR_img, wID, cv::Point(10, 120), cv::Scalar(255, 255, 255));
-                **/
-                if (Seting.bSeting)
-                {
-                    WinFrom = cv::Mat(1024, 1150, CV_8UC3);
-                    WinFrom = cv::Scalar(49, 52, 49);
-                    // cvui::image(WinFrom, 24, 10, r_RTSPframe);
-                    cvui::image(WinFrom, 10, 10, r_frame);
-                    cvui::image(WinFrom, 24, 480 + 50, OCR_img);
-                    cvui::checkbox(WinFrom, 24, 480 + 30, "Parameter setting", &Seting.bSeting, 0xff9912);
-                    // cvui::checkbox(WinFrom, 300, 480 + 30, "Save setting", &Card.bSave, 0xff9912);
-                    //  Render the settings window to house the UI
-                    cvui::window(WinFrom, x, 10, 480, 480, "Parameter setting");
-                    // cvui::text(WinFrom , x, 40, "Parameter setting", 0.6, 0X00ff00);
-                    cvui::text(WinFrom, x, 40, "H_min", 0.4);
-                    cvui::trackbar(WinFrom, x + 10, 50, width, &Seting.H_min, 0, 180, 15);
-                    cvui::text(WinFrom, x, 100, "H_max", 0.4);
-                    cvui::trackbar(WinFrom, x + 10, 110, width, &Seting.H_max, 0, 180, 15);
-                    cvui::text(WinFrom, x, 160, "S_min", 0.4);
-                    cvui::trackbar(WinFrom, x + 10, 170, width, &Seting.S_min, 0, 255, 15);
-                    cvui::text(WinFrom, x, 220, "S_max", 0.4);
-                    cvui::trackbar(WinFrom, x + 10, 230, width, &Seting.S_max, 0, 255, 15);
-                    cvui::text(WinFrom, x, 280, "V_min", 0.4);
-                    cvui::trackbar(WinFrom, x + 10, 290, width, &Seting.V_min, 0, 255, 15);
-                    cvui::text(WinFrom, x, 340, "V_max", 0.4);
-                    cvui::trackbar(WinFrom, x + 10, 350, width, &Seting.V_max, 0, 255, 15);
-
-                    if (!r_rgb_warped.empty())
-                        cvui::image(WinFrom, 340, 10, r_rgb_warped);
-
-                    Mat r_Processing, r_Nameimg, r_IDimg;
-                    cvtColor(Processing, r_Processing, COLOR_GRAY2BGR); //轉成hsv平面
-
-                    cvui::image(WinFrom, 10, 260, rframeImg);
-                    cvui::image(WinFrom, 340, 260, r_Processing);
-                    // cvui::image(WinFrom, 10,360, r_Nameimg);
-                    // cvui::image(WinFrom, 340, 360, r_IDimg);
-                    if (!Nameimg.empty())
-                    {
-                        cvtColor(Nameimg, r_Nameimg, COLOR_GRAY2BGR);
-                        cvui::image(WinFrom, 10, 360, r_Nameimg);
-                    }
-                    if (!IDimg.empty())
-                    {
-                        cvtColor(IDimg, r_IDimg, COLOR_GRAY2BGR);
-                        cvui::image(WinFrom, 340, 360, r_IDimg);
-                    }
-                    // namedWindow("I_rgb_warped",1);
-                    // setMouseCallback("I_rgb_warped",onMouse,NULL);
-
-                    if (r_hsv.empty())
-                    {
-                        cout << "OCR frame didn't get anything yet" << endl;
-                        continue;
-                    }
-                    imshow("HSV_frame", r_hsv);
-                }
-                else
-                {
-                    // imshow("OCR_img",r_frame);
-                    WinFrom = cv::Mat(1024, 768, CV_8UC3);
-                    WinFrom = cv::Scalar(49, 52, 49);
-
-                    // cvui::image(WinFrom, 24, 480+50, OCR_img);
-                    cvui::checkbox(WinFrom, 24, 480 + 30, "Parameter setting", &Seting.bSeting, 0xff9912);
-                    // cvui::checkbox(WinFrom, 300, 480 + 30, "Save setting", &Card.bSave, 0xff9912);
-
-                    cvui::image(WinFrom, 10, 10, r_frame);
-                    if (!I_rgb_warped.empty())
-                        cvui::image(WinFrom, 340, 10, r_rgb_warped);
-
-                    Mat r_Processing, r_Nameimg, r_IDimg;
-                    cvtColor(Processing, r_Processing, COLOR_GRAY2BGR); //轉成hsv平面
-
-                    cvui::image(WinFrom, 10, 260, rframeImg);
-                    cvui::image(WinFrom, 340, 260, r_Processing);
-                    if (!Nameimg.empty())
-                    {
-                        cvtColor(Nameimg, r_Nameimg, COLOR_GRAY2BGR);
-                        cvui::image(WinFrom, 10, 360, r_Nameimg);
-                    }
-                    if (!IDimg.empty())
-                    {
-                        cvtColor(IDimg, r_IDimg, COLOR_GRAY2BGR);
-                        cvui::image(WinFrom, 340, 360, r_IDimg);
-                    }
-
-                    // cvui::image(WinFrom, 24, 10,r_RTSPframe);
-                    cvui::text(WinFrom, 10, 480 + 60, rText_num, 0.4);
-
-                    //測試存資料
-                    if (cvui::button(WinFrom, 24, 555, "TEST SENDING"))
-                    {
-
-                        // Mat testimage;
-                        // testimage=imread("Test.jpg");
-                        cout << "bottom SendOCR result !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
-                        // string i500Ip, string fileDst
-                        sender.getI500Data(Seting.SCPRath, "/data/i500result.txt");
-                        // string lastName, string timeStamp, string personId
+                        cout << "Save NG Data" << endl;
                         string Data = getCurrentSystemTime();
-                        sender.genData("TestLee", Data, "A123456789");
-                        // cv::Mat faceFrame, cv::Mat idCardFrame
-                        sender.writeRequiredImg(frame, frame);
-                        // string cgmhUrl
-                        sender.sendCgmhData(Seting.CgmhUrl);
+                        if (!dst.empty())
+                        {
+                            imwrite("./NG/" + Data + "_src.jpg", dst);
+                        }
                     }
-                    //測試存資料en
                 }
-                cvui::update();
-                cvui::imshow(WINDOW_NAME, WinFrom);
-            }
-            auto endTimer_showUI = std::chrono::steady_clock::now();
-            std::chrono::milliseconds t_msec_showUI = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_showUI - startTimer_showUI);
-            std::cout << "[System] UI Update took " << t_msec_showUI.count() << "ms." << std::endl;
 
-            if (waitKey(150) == (char)115) // s
+                auto endTimer_OCROKNG = std::chrono::steady_clock::now();
+                std::chrono::milliseconds t_msec_OCROKNG = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_OCROKNG - startTimer_OCROKNG);
+                std::cout << "[Process Time] OCR Result Window took " << t_msec_OCROKNG.count() << "ms." << std::endl;
+                // RFID OK
+                // cout << "RFIDOK:" << bRFIDOK << endl;
+                if (bRFIDOK && CURR_RFID != "START" && !bOCROK)
+                {
+                    // ifstream inFile;
+                    // inFile.open("i500result.txt"); //open the input file
+                    // stringstream strStream;
+                    // strStream << inFile.rdbuf(); //read the file
+                    // string str = strStream.str(); //str holds the content of the file
+                    // str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
+                    // string delimiter = ",";
+                    // string _temperature = str.substr(str.find(delimiter) + 1 , -1);
+                    // inFile.close();
+
+                    // resize(frame,r_frame , Size(320,240),INTER_NEAREST);
+                    // putText(RFID_img, _temperature, cv::Point(400, 50),cv::FONT_HERSHEY_COMPLEX,2, cv::Scalar(0, 255, 0),3);
+
+                    /*** Future
+                    rfid_text_name = "MR./MS.:" + rfid_Text_name;
+                    std::cout << rfid_text_name << std::endl;
+                    ft2->putText(RFID_img, rfid_text_name, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
+
+                    rfid_text_id = "ID: " + rfid_Text_num;
+                    std::cout << rfid_text_id << std::endl;
+                    ft2->putText(RFID_img, rfid_text_id, cv::Point(10, 120), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
+
+                    string rstr = "請收回證件";
+                    ft2->putText(RFID_img, rstr, cv::Point(10, 190), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
+                    ***/
+                    // Current
+                    if (CURR_RFID != "START"){
+                        ft2->putText(RFID_img, "卡片UID: "+CURR_RFID, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
+                    }
+                    
+
+                    // moveWindow("Loading card data...", 0, 1200);
+                    Mat RoiImg, GrayImg, MaskImg, InvMaskImg;
+                    moveWindow("RFID Result", 0, 750);
+                    imshow("RFID Result", RFID_img);
+                    string Data = getCurrentSystemTime();
+                    // waitKey(0);
+                    if (Seting.send_commd && RFID_send)
+                    {
+                        cout << "SendOCR_result " << endl;
+                        // SendOCR_result(Seting);
+                        RFID_send = false;
+                    }
+                }
+                if (bRFIDNG)
+                {
+                    Loading_img = Mat(250, 768, CV_8UC3);
+                    Loading_img = Scalar(49, 52, 49);
+                    string Text_load = "卡片未登入";
+                    ft2->putText(Loading_img, Text_load, cv::Point(10, 50), 50, cv::Scalar(255, 255, 255), cv::FILLED, cv::LINE_AA, true);
+                    imshow("RFID Result", Loading_img);
+                    moveWindow("RFID Result", 0, 750);
+                }
+
+                auto startTimer_showUI = std::chrono::steady_clock::now();
+
+                if (Seting.show_r)
+                {
+
+                    Mat r_rgb_warped;
+                    resize(frame, r_frame, Size(320, 240), INTER_NEAREST);
+                    if (!I_rgb_warped.empty())
+                        resize(I_rgb_warped, r_rgb_warped, Size(320, 240), INTER_NEAREST);
+
+                    /**
+                    rText_name = "Name: " + Text_name;
+                    char *cname = (char *)rText_name.c_str();
+
+                    wchar_t *wname;
+                    ToWchar(cname, wname);
+                    // text.putText(OCR_img, wname, cv::Point(10, 50), cv::Scalar(255, 255, 255));
+
+                    rText_num = "ID: " + Text_num;
+                    char *cID = (char *)rText_num.c_str();
+                    wchar_t *wID;
+                    ToWchar(cID, wID);
+                    // text.putText(OCR_img, wID, cv::Point(10, 120), cv::Scalar(255, 255, 255));
+                    **/
+                    if (Seting.bSeting)
+                    {
+                        WinFrom = cv::Mat(1024, 1150, CV_8UC3);
+                        WinFrom = cv::Scalar(49, 52, 49);
+                        // cvui::image(WinFrom, 24, 10, r_RTSPframe);
+                        cvui::image(WinFrom, 10, 10, r_frame);
+                        cvui::image(WinFrom, 24, 480 + 50, OCR_img);
+                        cvui::checkbox(WinFrom, 24, 480 + 30, "Parameter setting", &Seting.bSeting, 0xff9912);
+                        // cvui::checkbox(WinFrom, 300, 480 + 30, "Save setting", &Card.bSave, 0xff9912);
+                        //  Render the settings window to house the UI
+                        cvui::window(WinFrom, x, 10, 480, 480, "Parameter setting");
+                        // cvui::text(WinFrom , x, 40, "Parameter setting", 0.6, 0X00ff00);
+                        cvui::text(WinFrom, x, 40, "H_min", 0.4);
+                        cvui::trackbar(WinFrom, x + 10, 50, width, &Seting.H_min, 0, 180, 15);
+                        cvui::text(WinFrom, x, 100, "H_max", 0.4);
+                        cvui::trackbar(WinFrom, x + 10, 110, width, &Seting.H_max, 0, 180, 15);
+                        cvui::text(WinFrom, x, 160, "S_min", 0.4);
+                        cvui::trackbar(WinFrom, x + 10, 170, width, &Seting.S_min, 0, 255, 15);
+                        cvui::text(WinFrom, x, 220, "S_max", 0.4);
+                        cvui::trackbar(WinFrom, x + 10, 230, width, &Seting.S_max, 0, 255, 15);
+                        cvui::text(WinFrom, x, 280, "V_min", 0.4);
+                        cvui::trackbar(WinFrom, x + 10, 290, width, &Seting.V_min, 0, 255, 15);
+                        cvui::text(WinFrom, x, 340, "V_max", 0.4);
+                        cvui::trackbar(WinFrom, x + 10, 350, width, &Seting.V_max, 0, 255, 15);
+
+                        if (!r_rgb_warped.empty())
+                            cvui::image(WinFrom, 340, 10, r_rgb_warped);
+
+                        Mat r_Processing, r_Nameimg, r_IDimg;
+                        cvtColor(Processing, r_Processing, COLOR_GRAY2BGR); //轉成hsv平面
+
+                        cvui::image(WinFrom, 10, 260, rframeImg);
+                        cvui::image(WinFrom, 340, 260, r_Processing);
+                        // cvui::image(WinFrom, 10,360, r_Nameimg);
+                        // cvui::image(WinFrom, 340, 360, r_IDimg);
+                        if (!Nameimg.empty())
+                        {
+                            cvtColor(Nameimg, r_Nameimg, COLOR_GRAY2BGR);
+                            cvui::image(WinFrom, 10, 360, r_Nameimg);
+                        }
+                        if (!IDimg.empty())
+                        {
+                            cvtColor(IDimg, r_IDimg, COLOR_GRAY2BGR);
+                            cvui::image(WinFrom, 340, 360, r_IDimg);
+                        }
+                        // namedWindow("I_rgb_warped",1);
+                        // setMouseCallback("I_rgb_warped",onMouse,NULL);
+
+                        if (r_hsv.empty())
+                        {
+                            cout << "OCR frame didn't get anything yet" << endl;
+                            continue;
+                        }
+                        imshow("HSV_frame", r_hsv);
+                    }
+                    else
+                    {
+                        // imshow("OCR_img",r_frame);
+                        WinFrom = cv::Mat(1024, 768, CV_8UC3);
+                        WinFrom = cv::Scalar(49, 52, 49);
+
+                        // cvui::image(WinFrom, 24, 480+50, OCR_img);
+                        cvui::checkbox(WinFrom, 24, 480 + 30, "Parameter setting", &Seting.bSeting, 0xff9912);
+                        // cvui::checkbox(WinFrom, 300, 480 + 30, "Save setting", &Card.bSave, 0xff9912);
+
+                        cvui::image(WinFrom, 10, 10, r_frame);
+                        if (!I_rgb_warped.empty())
+                            cvui::image(WinFrom, 340, 10, r_rgb_warped);
+
+                        Mat r_Processing, r_Nameimg, r_IDimg;
+                        cvtColor(Processing, r_Processing, COLOR_GRAY2BGR); //轉成hsv平面
+
+                        cvui::image(WinFrom, 10, 260, rframeImg);
+                        cvui::image(WinFrom, 340, 260, r_Processing);
+                        if (!Nameimg.empty())
+                        {
+                            cvtColor(Nameimg, r_Nameimg, COLOR_GRAY2BGR);
+                            cvui::image(WinFrom, 10, 360, r_Nameimg);
+                        }
+                        if (!IDimg.empty())
+                        {
+                            cvtColor(IDimg, r_IDimg, COLOR_GRAY2BGR);
+                            cvui::image(WinFrom, 340, 360, r_IDimg);
+                        }
+
+                        // cvui::image(WinFrom, 24, 10,r_RTSPframe);
+                        cvui::text(WinFrom, 10, 480 + 60, rText_num, 0.4);
+
+                        //測試存資料
+                        if (cvui::button(WinFrom, 24, 555, "TEST SENDING"))
+                        {
+
+                            // Mat testimage;
+                            // testimage=imread("Test.jpg");
+                            cout << "bottom SendOCR result !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
+                            // string i500Ip, string fileDst
+                            sender.getI500Data(Seting.SCPRath, "/data/i500result.txt");
+                            // string lastName, string timeStamp, string personId
+                            string Data = getCurrentSystemTime();
+                            sender.genData("TestLee", Data, "A123456789");
+                            // cv::Mat faceFrame, cv::Mat idCardFrame
+                            sender.writeRequiredImg(frame, frame);
+                            // string cgmhUrl
+                            sender.sendCgmhData(Seting.CgmhUrl);
+                        }
+                        //測試存資料en
+                    }
+                    cvui::update();
+                    cvui::imshow(WINDOW_NAME, WinFrom);
+                }
+                auto endTimer_showUI = std::chrono::steady_clock::now();
+                std::chrono::milliseconds t_msec_showUI = std::chrono::duration_cast<std::chrono::milliseconds>(endTimer_showUI - startTimer_showUI);
+                std::cout << "[System] UI Update took " << t_msec_showUI.count() << "ms." << std::endl;
+
+                if (waitKey(150) == (char)115) // s
+                {
+                    string Data = getCurrentSystemTime();
+                    cout << "./Snap/" + Data + "_src.jpg" << endl;
+                    if (!dst.empty())
+                        imwrite("./Snap/" + Data + "_src.jpg", dst);
+                    if (!I_rgb_warped.empty())
+                        imwrite("./Snap/" + Data + "_rgb.jpg", I_rgb_warped);
+                    if (!I_hsv_warped.empty())
+                        imwrite("./Snap/" + Data + "_hsv.jpg", I_hsv_warped);
+                    if (!Nameimg.empty())
+                        imwrite("./Snap/" + Data + "_Name.jpg", Nameimg);
+                    if (!IDimg.empty())
+                        imwrite("./Snap/" + Data + "_ID.jpg", IDimg);
+                    cout << "===Save Image=== " << endl;
+                }
+                if (waitKey(5) == (char)113) // q
+                {
+                    std::cout << "User Stop The Program." << std::endl;
+                    break;
+                }
+                    
+
+                auto ALLendTimer = std::chrono::steady_clock::now();
+                std::chrono::milliseconds ALL_t_msec = std::chrono::duration_cast<std::chrono::milliseconds>(ALLendTimer - ALLstartTimer);
+                std::cout << "[System] System Loop took " << ALL_t_msec.count() << "ms." << std::endl;
+                // waitKey(0);
+        
+            }
+            catch(cv::Exception& e)
             {
-                string Data = getCurrentSystemTime();
-                cout << "./Snap/" + Data + "_src.jpg" << endl;
-                if (!dst.empty())
-                    imwrite("./Snap/" + Data + "_src.jpg", dst);
-                if (!I_rgb_warped.empty())
-                    imwrite("./Snap/" + Data + "_rgb.jpg", I_rgb_warped);
-                if (!I_hsv_warped.empty())
-                    imwrite("./Snap/" + Data + "_hsv.jpg", I_hsv_warped);
-                if (!Nameimg.empty())
-                    imwrite("./Snap/" + Data + "_Name.jpg", Nameimg);
-                if (!IDimg.empty())
-                    imwrite("./Snap/" + Data + "_ID.jpg", IDimg);
-                cout << "===Save Image=== " << endl;
+                const char* err_msg = e.what();
+                std::cout << "exception caught: " << err_msg << std::endl;
             }
-            if (waitKey(5) == (char)113)
-                break;
-
-            auto ALLendTimer = std::chrono::steady_clock::now();
-            std::chrono::milliseconds ALL_t_msec = std::chrono::duration_cast<std::chrono::milliseconds>(ALLendTimer - ALLstartTimer);
-            std::cout << "[System] System Loop took " << ALL_t_msec.count() << "ms." << std::endl;
-            // waitKey(0);
         }
     }
 }

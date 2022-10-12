@@ -3,17 +3,17 @@
 <Card_Type_num>2</Card_Type_num>
 <Cap_Widrh>1920</Cap_Widrh>
 <Cap_Height>1080</Cap_Height>
-<Cap_Fov_X>225</Cap_Fov_X>
+<Cap_Fov_X>300</Cap_Fov_X>
 <Cap_Fov_Y>0</Cap_Fov_Y>
-<Cap_Fov_W>1655</Cap_Fov_W>
-<Cap_Fov_H>1080</Cap_Fov_H>
+<Cap_Fov_W>1530</Cap_Fov_W>
+<Cap_Fov_H>1055</Cap_Fov_H>
 <Base_Card_PixX>1030</Base_Card_PixX>
 <Base_Card_PixY>630</Base_Card_PixY>
 <Base_H_min>0</Base_H_min>
 <Base_H_max>180</Base_H_max>
 <Base_S_min>0</Base_S_min>
 <Base_S_max>255</Base_S_max>
-<Base_V_min>220</Base_V_min>
+<Base_V_min>215</Base_V_min>
 <Base_V_max>255</Base_V_max>
 <Save_OcrFile_Name>OCR.txt</Save_OcrFile_Name>
 <SSH_Path>"| ssh root@192.168.53.32 -T &quot; cat &gt; /data/OCR.txt&quot;"</SSH_Path>
@@ -22,10 +22,16 @@
 <RTSP_Img></RTSP_Img>
 <Show_Win>1</Show_Win>
 
+<illumination_loc>0.92</illumination_loc>
+<alpha>0.4</alpha>
+<beta>0.4</beta>
+<bottom_area>0.9</bottom_area>
+<top_area>0.09</top_area>
+
 <offline>0</offline>
 <off_ImgePath>"2021-10-09-17.54.12_src.jpg"</off_ImgePath>
 
-<bUse_RFID>0</bUse_RFID>
+<bUse_RFID>1</bUse_RFID>
 <RFIDPath>/dev/shm/uid.txt</RFIDPath>
 <bUse_SmartCard>0</bUse_SmartCard>
 <SmartCardPath>/dev/shm/HealthCard.txt</SmartCardPath>
